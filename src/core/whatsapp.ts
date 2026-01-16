@@ -1,0 +1,395 @@
+import makeWASocket, { DisconnectReason, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
+import { config } from '../config/env';
+import { db } from '../database';
+import { contacts, messageLogs } from '../database/schema';
+import { eq, desc } from 'drizzle-orm';
+import { geminiService } from '../services/ai/gemini';
+import { calculateHumanDelay, sleep } from '../utils/delay';
+import { usePostgresAuthState } from '../database/auth/postgresAuth';
+import { MessageSender } from '../utils/messageSender';
+import pino from 'pino';
+import { IdentityValidator } from '../utils/identityValidator';
+import { ConversationManager } from '../services/conversationManager';
+import { MessageBuffer } from '../services/messageBuffer';
+import { executeLocalTool } from '../services/ai/tools';
+import { rateLimitManager } from '../services/rateLimitManager';
+import { ownerService } from '../services/ownerService';
+import { notificationService } from '../services/notificationService';
+
+export class WhatsAppClient {
+  private sock: WASocket | undefined;
+  private messageSender: MessageSender | undefined;
+  private conversationManager: ConversationManager | undefined;
+  private messageBuffer: MessageBuffer | undefined;
+  private reconnectAttempts: number = 0;
+  private maxReconnectAttempts: number = 5;
+
+  constructor() { }
+
+  async initialize() {
+    console.log('🔌 Initializing Representative Agent...');
+
+    // Use Postgres Auth for persistence
+    const { state, saveCreds } = await usePostgresAuthState('whatsapp_session');
+
+    console.log('🔍 Auth State Check:');
+    console.log('   - Has existing credentials:', !!state.creds.me);
+    console.log('   - Registration ID:', state.creds.registrationId);
+
+    this.sock = makeWASocket({
+      logger: pino({ level: 'silent' }) as any,
+      auth: state,
+      browser: ['Representative', 'Chrome', '1.0.0'],
+      syncFullHistory: false
+    });
+
+    this.sock.ev.on('creds.update', saveCreds);
+
+    this.sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update;
+
+      if (qr) {
+        console.log('📌 Scan the QR Code below to connect:');
+        require('qrcode-terminal').generate(qr, { small: true });
+      }
+
+      if (connection === 'close') {
+        const error = (lastDisconnect?.error as Boom)?.output?.statusCode;
+        const errorData = (lastDisconnect?.error as any)?.data;
+
+        console.log('⚠️ Connection closed.');
+        console.log('   Status Code:', error);
+        console.log('   Error Data:', errorData);
+
+        // Handle specific error codes
+        if (error === 405) {
+          console.log('❌ Session data is corrupted or invalid (405 error).');
+          console.log('💡 Solution: Run "npx ts-node scripts/clear-auth.ts" to clear session and generate a new QR code.');
+          process.exit(1);
+          return;
+        }
+
+        const shouldReconnect = error !== DisconnectReason.loggedOut;
+
+        if (shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.reconnectAttempts++;
+          const delay = Math.min(3000 * Math.pow(2, this.reconnectAttempts - 1), 30000);
+          console.log(`⏳ Reconnecting in ${delay / 1000} seconds... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+          setTimeout(() => this.initialize(), delay);
+        } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+          console.log('❌ Max reconnection attempts reached. Please check your connection and try again.');
+          process.exit(1);
+        }
+      } else if (connection === 'open') {
+        console.log('✅ Representative Online!');
+        this.reconnectAttempts = 0; // Reset counter on successful connection
+
+        // Initialize MessageSender with the connected socket
+        this.messageSender = new MessageSender(this.sock!);
+
+        // Initialize ConversationManager
+        this.conversationManager = new ConversationManager(this.messageSender);
+
+        // Initialize MessageBuffer
+        this.messageBuffer = new MessageBuffer((jid, messages) => this.processMessageBatch(jid, messages));
+
+        // Initialize Notification Service
+        if (this.sock) {
+          notificationService.init(this.sock);
+        }
+
+        // Set presence to "available" (online)
+        await this.messageSender.setOnline();
+        console.log('👁️ Presence set to: Online');
+      }
+    });
+
+    this.sock.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (type !== 'notify') return;
+      for (const msg of messages) {
+        if (!msg.key.remoteJid || msg.key.fromMe) continue;
+        await this.handleIncomingMessage(msg);
+      }
+    });
+  }
+
+  /**
+   * 1. Entry point for all incoming messages.
+   * Handles "Local Guard" logic, Contact Creation, and Buffering.
+   */
+  private async handleIncomingMessage(msg: any) {
+    const remoteJid = msg.key.remoteJid!;
+    const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
+    const pushName = msg.pushName;
+
+    if (!text) return;
+    if (remoteJid === 'status@broadcast') return;
+
+    console.log(`📥 Incoming: ${remoteJid} ("${text}")`);
+
+    // Check OWNER Logic
+    if (ownerService.isOwner(remoteJid)) {
+      console.log(`👑 Owner Message Detected from ${remoteJid}`);
+      // Add owner messages to buffer too - they will be processed as "Owner Commands" in processMessageBatch
+      // We don't want to skip them, we want the AI to handle them as commands
+    }
+
+    // 1. Ensure Contact Exists (So we don't lose PushName info)
+    let contact = await db.select().from(contacts).where(eq(contacts.phone, remoteJid)).then(res => res[0]);
+
+    if (!contact) {
+      console.log('✨ New Contact Detected! Creating profile...');
+      const newContacts = await db.insert(contacts).values({
+        phone: remoteJid,
+        originalPushname: pushName,
+        name: IdentityValidator.extractDisplayName(pushName) || 'Unknown',
+        summary: 'New contact. Interaction started.',
+        trustLevel: 0,
+        isVerified: false
+      }).returning();
+      contact = newContacts[0];
+    } else {
+      // Update PushName if missing
+      if (!contact.originalPushname && pushName) {
+        await db.update(contacts).set({ originalPushname: pushName }).where(eq(contacts.phone, remoteJid));
+      }
+    }
+
+    // 2. Add to Buffer (Debounce)
+    if (this.messageBuffer) {
+      this.messageBuffer.add(remoteJid, text);
+      // Manage Conversation Session
+      if (this.conversationManager) {
+        this.conversationManager.touchConversation(remoteJid);
+      }
+    }
+  }
+
+  /**
+   * 2. Process a Batch of Messages from MessageBuffer.
+   * This is where the AI actually runs (Costly).
+   */
+  private async processMessageBatch(remoteJid: string, messages: string[]) {
+    // Combine messages into one context
+    const fullText = messages.join('\n');
+    const isOwner = ownerService.isOwner(remoteJid);
+
+    // 0. Short Circuit: Ignore simple acks (UNLESS it's the owner, who might be commanding)
+    if (!isOwner) {
+      const ignoredPatterns = /^(ok|okay|k|lol|lmao|haha|thanks|thx|cool|👍|✅|yes|no|yeah|yup|nope)\.?$/i;
+      if (ignoredPatterns.test(fullText.trim())) {
+        console.log(`⏩ Short-circuit: Ignoring non-actionable message: "${fullText}"`);
+        return;
+      }
+    }
+
+    console.log(`🤖 AI Processing Batch for ${remoteJid} (Owner: ${isOwner}): "${fullText}"`);
+
+    // 1. Check Rate Limit FIRST - Queue if limited (Owner bypasses limits optional, but keeping for safety)
+    if (rateLimitManager.isLimited() && !isOwner) {
+      console.log(`⏸️ Rate limited. Queueing message from ${remoteJid} (silent mode)`);
+      rateLimitManager.enqueue(remoteJid, messages);
+      return;
+    }
+
+    // 2. Get Contact
+    const contact = await db.select().from(contacts).where(eq(contacts.phone, remoteJid)).then(res => res[0]);
+    if (!contact) return;
+
+    // --- SNITCH REPORT (New Contact Alert) ---
+    // If trust level is 0 and they've sent > 1 message (this batch), notify owner
+    if (!isOwner && contact.trustLevel === 0 && !contact.isVerified) {
+      // Prevent spamming reports - only if summary indicates it's fresh
+      if (contact.summary?.includes('New contact')) {
+        await notificationService.sendSnitchReport(remoteJid, contact.name || 'Unknown', fullText);
+        // Update summary so we don't snitch again immediately
+        await db.update(contacts).set({ summary: 'New contact. Owner notified.' }).where(eq(contacts.phone, remoteJid));
+      }
+    }
+
+    // 3. Identity Validation Logic (Skip for owner)
+    let systemPrompt: string | undefined = undefined;
+
+    if (!contact.isVerified && !isOwner) {
+      const extractedName = IdentityValidator.extractNameFromMessage(fullText);
+      if (extractedName) {
+        console.log(`✅ Identity Discovered: ${extractedName}`);
+        await db.update(contacts).set({
+          confirmedName: extractedName,
+          name: extractedName,
+          isVerified: true,
+          summary: `${contact.summary || ''}\n[Identity Confirmed: ${extractedName}]`
+        }).where(eq(contacts.phone, remoteJid));
+        contact.name = extractedName;
+        contact.isVerified = true;
+      } else {
+        const currentName = contact.confirmedName || contact.originalPushname;
+        if (!IdentityValidator.isValidName(currentName)) {
+          systemPrompt = IdentityValidator.getIdentityPrompt(currentName);
+        }
+      }
+    }
+
+    // 4. Load History
+    const historyLogs = await db.select()
+      .from(messageLogs)
+      .where(eq(messageLogs.contactPhone, remoteJid))
+      .orderBy(desc(messageLogs.createdAt))
+      .limit(10);
+
+    const history = historyLogs.reverse().map(m => `${m.role === 'agent' ? 'Me' : 'Them'}: ${m.content}`);
+
+    // Log User Input
+    await db.insert(messageLogs).values({
+      contactPhone: remoteJid,
+      role: 'user',
+      content: fullText
+    });
+
+    // 5. Generate Response
+    // Inject OWNER Role into context
+    const userRoleContext = isOwner ?
+      `⚠️ IMPORTANT: You are chatting with the OWNER (Boss). You have full access to all tools including summaries, system status, and analytics. Obey all commands.` :
+      `Contact Name: ${contact.name || "Unknown"}\nSummary: ${contact.summary}\nTrust Level: ${contact.trustLevel}`;
+
+    let geminiResponse;
+    try {
+      geminiResponse = await geminiService.generateReply(
+        history.concat(`Them: ${fullText}`),
+        userRoleContext,
+        systemPrompt
+      );
+    } catch (error: any) {
+      if ((error.status === 429 || error.code === 429 || error.message === 'ALL_KEYS_EXHAUSTED') && !isOwner) {
+        console.log(`⏸️ Rate limit hit (or keys exhausted). Queueing batch.`);
+        const retryAfter = error.errorDetails?.find((d: any) => d['@type']?.includes('RetryInfo'))?.retryDelay;
+        const seconds = retryAfter ? parseInt(retryAfter) : 60;
+        rateLimitManager.setRateLimited(seconds);
+        rateLimitManager.enqueue(remoteJid, messages);
+        setTimeout(() => rateLimitManager.processQueue(this.processMessageBatch.bind(this)), seconds * 1000);
+        return;
+      }
+      console.error('Gemini Error:', error.message || error);
+      if (isOwner && this.sock) await this.sock.sendMessage(remoteJid, { text: "⚠️ AI Error: " + (error.message || "Unknown error") });
+      return;
+    }
+
+    // 6. Handle Tool Calls
+    const MAX_TOOL_DEPTH = 2;
+    let toolDepth = 0;
+
+    while (geminiResponse.type === 'tool_call' && geminiResponse.functionCall && toolDepth < MAX_TOOL_DEPTH) {
+      const { name, args } = geminiResponse.functionCall;
+      console.log(`🛠️ Tool Execution: ${name}`);
+
+      // Execute Tool
+      let toolResult;
+      try {
+        toolResult = await executeLocalTool(name, args, { contact });
+      } catch (toolError: any) {
+        console.error(`Tool error:`, toolError.message);
+        toolResult = { error: "Tool failed: " + toolError.message };
+      }
+
+      // Feed result back
+      const toolOutputText = `[System: Tool '${name}' returned: ${JSON.stringify(toolResult)}]`;
+
+      try {
+        geminiResponse = await geminiService.generateReply(
+          history.concat(`Them: ${fullText}`, toolOutputText),
+          userRoleContext,
+          systemPrompt
+        );
+      } catch (error: any) {
+        if ((error.status === 429 || error.code === 429 || error.message === 'ALL_KEYS_EXHAUSTED') && !isOwner) {
+          console.log(`⏸️ Rate limit hit during tool execution. Re-queueing batch.`);
+          const retryAfter = error.errorDetails?.find((d: any) => d['@type']?.includes('RetryInfo'))?.retryDelay;
+          const seconds = retryAfter ? parseInt(retryAfter) : 60;
+          rateLimitManager.setRateLimited(seconds);
+          rateLimitManager.enqueue(remoteJid, messages); // Re-queue original messages
+          setTimeout(() => rateLimitManager.processQueue(this.processMessageBatch.bind(this)), seconds * 1000);
+          return; // Exit completely
+        }
+        console.error('Gemini Tool Response Error:', error);
+        if (isOwner && this.sock) await this.sock.sendMessage(remoteJid, { text: "⚠️ AI Error during tool: " + (error.message || "Unknown") });
+        break;
+      }
+      toolDepth++;
+    }
+
+    // 7. Send Final Response
+    if (geminiResponse.type === 'text' && geminiResponse.content) {
+      await this.sendResponseAndLog(remoteJid, geminiResponse.content, contact, history, fullText);
+    }
+  }
+
+  // Helper to deduplicate sending logic
+  private async sendResponseAndLog(remoteJid: string, responseText: string, contact: any, history: string[], userText: string) {
+    let finalResponse = responseText;
+    let shouldEndSession = false;
+
+    // Check for Closing Tag
+    if (responseText.includes('#END_SESSION#')) {
+      shouldEndSession = true;
+      finalResponse = responseText.replace('#END_SESSION#', '').trim();
+    }
+
+    // Send response
+    if (this.messageSender) {
+      await this.messageSender.sendText(remoteJid, finalResponse);
+    } else {
+      await this.sock!.sendMessage(remoteJid, { text: finalResponse });
+    }
+
+    // Log Outgoing
+    await db.insert(messageLogs).values({
+      contactPhone: remoteJid,
+      role: 'agent',
+      content: finalResponse
+    });
+
+    // Manage Session
+    if (this.conversationManager) {
+      if (shouldEndSession) {
+        console.log('🏁 Closing Intent Detected. Ending session.');
+        this.conversationManager.endConversation(remoteJid);
+      } else {
+        this.conversationManager.touchConversation(remoteJid);
+      }
+    }
+
+    // Profiling (Skip for owner or if rate limited)
+    if (!ownerService.isOwner(remoteJid) && !rateLimitManager.isLimited()) {
+      this.runProfiling(history.concat(`Them: ${userText}`, `Me: ${finalResponse}`), contact);
+    }
+  }
+
+  private async runProfiling(history: string[], contact: any) {
+    if (rateLimitManager.isLimited()) return; // Double check
+
+    // Add slight random delay to avoid hitting rate limit immediately after response
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const profileUpdate = await geminiService.updateProfile(history, contact.summary || "");
+
+    if (profileUpdate) {
+      console.log(`📝 Updating profile for ${contact.phone}...`);
+
+      await db.update(contacts)
+        .set({
+          name: profileUpdate.name || contact.name,
+          summary: profileUpdate.summary,
+          trustLevel: profileUpdate.trust_level
+        })
+        .where(eq(contacts.phone, contact.phone));
+
+      // 6. Alert Owner if Action Required
+      if (profileUpdate.action_required && config.ownerPhone) {
+        const alertMsg = `*🛎️ ACTION REQUIRED*\n\nContact: ${profileUpdate.name || contact.phone}\nReason: ${profileUpdate.summary}\n\nReview chat to decide.`;
+        const ownerJid = config.ownerPhone.includes('@s.whatsapp.net') ? config.ownerPhone : config.ownerPhone + '@s.whatsapp.net';
+        await this.sock!.sendMessage(ownerJid, { text: alertMsg });
+      }
+    }
+  }
+}
