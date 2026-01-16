@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { config } from '../../config/env';
 import { SYSTEM_PROMPTS } from './prompts';
 import { AI_TOOLS } from './tools';
 import { keyManager } from '../keyManager';
@@ -29,7 +30,7 @@ export class GeminiService {
 
       try {
         const genAI = new GoogleGenerativeAI(key);
-        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' }); // Using reliable model
+        const model = genAI.getGenerativeModel({ model: config.geminiModel }); // Using reliable model
         return await operation(model);
 
       } catch (error: any) {

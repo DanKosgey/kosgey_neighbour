@@ -11,6 +11,9 @@
     "db:push": "drizzle-kit push:pg",
     "clear-auth": "ts-node scripts/clear-auth.ts"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "keywords": [
     "whatsapp",
     "ai",

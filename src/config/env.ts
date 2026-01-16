@@ -29,6 +29,7 @@ export const config = {
     ownerPhone: process.env.OWNER_PHONE_NUMBER, // The "Private" Number
     geminiKey: process.env.GEMINI_API_KEY,      // Fallback/Legacy
     geminiKeys: getGeminiKeys(),                // The full pool
+    geminiModel: process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp', // Default to 2.0 Flash
     databaseUrl: process.env.DATABASE_URL,
     nodeEnv: process.env.NODE_ENV || 'development'
 };
