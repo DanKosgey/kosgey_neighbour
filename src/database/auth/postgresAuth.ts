@@ -77,7 +77,8 @@ export const usePostgresAuthState = async (collectionName: string): Promise<{ st
                     return data;
                 },
                 set: async (data) => {
-                    const tasks: Promise<void>[] = [];
+                    const tasks: (() => Promise<void>)[] = [];
+
                     for (const category in data) {
                         const categoryKey = category as keyof SignalDataTypeMap;
                         const categoryData = data[categoryKey];
@@ -87,13 +88,19 @@ export const usePostgresAuthState = async (collectionName: string): Promise<{ st
                         for (const id in categoryData) {
                             const value = categoryData[id];
                             if (value) {
-                                tasks.push(writeData(value, `${category}:${id}`));
+                                tasks.push(() => writeData(value, `${category}:${id}`));
                             } else {
-                                tasks.push(removeData(`${category}:${id}`));
+                                tasks.push(() => removeData(`${category}:${id}`));
                             }
                         }
                     }
-                    await Promise.all(tasks);
+
+                    // Execute in chunks to avoid overwhelming the DB connection (Socket errors)
+                    const CHUNK_SIZE = 5;
+                    for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
+                        const chunk = tasks.slice(i, i + CHUNK_SIZE);
+                        await Promise.all(chunk.map(task => task()));
+                    }
                 }
             }
         },

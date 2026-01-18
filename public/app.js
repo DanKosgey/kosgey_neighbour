@@ -417,7 +417,7 @@ function initializeSettings() {
         if (confirm('Are you sure you want to disconnect WhatsApp? This will log you out and you will need to scan the QR code again.')) {
             const btn = document.getElementById('disconnect-btn');
             const originalText = btn.textContent;
-            btn.textContent = 'Disconnecting...';
+            btn.textContent = 'Disconnecting & Restarting...';
             btn.disabled = true;
 
             try {
@@ -425,8 +425,30 @@ function initializeSettings() {
                 const data = await response.json();
 
                 if (data.success) {
-                    alert('Disconnected successfully. The page will reload to show the new QR code.');
-                    window.location.reload();
+                    btn.textContent = 'Rebooting Server... (Please wait)';
+                    alert('Disconnected successfully. The server is restarting to clear the session. Please wait about 30 seconds for the page to reload automatically.');
+
+                    // Poll for server
+                    let attempts = 0;
+                    const checkServer = async () => {
+                        attempts++;
+                        try {
+                            const statusRes = await fetch(`${API_BASE}/api/status`);
+                            if (statusRes.ok) {
+                                window.location.reload();
+                                return;
+                            }
+                        } catch (e) { console.log('Server down...'); }
+
+                        // Retry for 2 mins
+                        if (attempts < 60) setTimeout(checkServer, 2000);
+                        else {
+                            alert('Server restart took too long. Please refresh manually.');
+                            window.location.reload();
+                        }
+                    };
+                    setTimeout(checkServer, 2000);
+
                 } else {
                     throw new Error(data.error || 'Disconnect failed');
                 }
