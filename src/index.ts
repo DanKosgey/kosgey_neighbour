@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import { config } from './config/env';
 import { WhatsAppClient } from './core/whatsapp';
 
 const app = express();
@@ -26,7 +27,7 @@ const start = async () => {
         await client.initialize();
 
         // 2. Start API Server
-        const PORT = 3001;
+        const PORT = config.port;
         app.listen(PORT, () => {
             console.log(`🌍 API Server running on port ${PORT}`);
         });
