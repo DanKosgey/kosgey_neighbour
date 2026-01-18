@@ -1,36 +1,36 @@
+/**
+ * Clear Auth Script
+ * Clears corrupted authentication data and session locks
+ * Run this when you get decryption errors or session conflicts
+ */
 
 import { db } from '../src/database';
-import { authCredentials } from '../src/database/schema';
-import { like } from 'drizzle-orm';
-import { config } from '../src/config/env';
+import { authCredentials, sessionLock } from '../src/database/schema';
+import { sql } from 'drizzle-orm';
 
-const clearAuth = async () => {
-    console.log('🧹 Clearing WhatsApp session credentials...');
-    if (!config.databaseUrl) {
-        console.error('❌ DATABASE_URL is not defined in .env');
-        process.exit(1);
-    }
-
+async function clearAuth() {
     try {
-        // First, let's see what's in the database
-        const allCreds = await db.select().from(authCredentials);
-        console.log(`📊 Found ${allCreds.length} credential entries in database`);
+        console.log('🧹 Clearing authentication data...');
 
-        if (allCreds.length > 0) {
-            console.log('🔍 Keys found:');
-            allCreds.forEach(cred => console.log(`   - ${cred.key}`));
-        }
+        // 1. Clear all auth credentials
+        const deletedCreds = await db.delete(authCredentials);
+        console.log('✅ Cleared auth_credentials table');
 
-        // Delete ALL auth credentials (not just whatsapp_session)
-        const deleted = await db.delete(authCredentials).returning();
+        // 2. Clear session locks
+        const deletedLocks = await db.delete(sessionLock);
+        console.log('✅ Cleared session_lock table');
 
-        console.log(`✅ Successfully cleared ${deleted.length} authentication entries!`);
-        console.log('🔄 Please restart the agent to generate a new QR code.');
+        console.log('\n✨ Authentication data cleared successfully!');
+        console.log('📌 Next steps:');
+        console.log('   1. Restart your application');
+        console.log('   2. Scan the new QR code with WhatsApp');
+        console.log('   3. Your agent will be connected with fresh credentials\n');
+
         process.exit(0);
     } catch (error) {
-        console.error('❌ Error clearing auth:', error);
+        console.error('❌ Error clearing auth data:', error);
         process.exit(1);
     }
-};
+}
 
 clearAuth();

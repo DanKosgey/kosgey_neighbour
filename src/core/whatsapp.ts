@@ -16,6 +16,7 @@ import { executeLocalTool } from '../services/ai/tools';
 import { rateLimitManager } from '../services/rateLimitManager';
 import { ownerService } from '../services/ownerService';
 import { notificationService } from '../services/notificationService';
+import { sessionManager } from '../services/sessionManager';
 
 export class WhatsAppClient {
   private sock: WASocket | undefined;
@@ -39,6 +40,19 @@ export class WhatsAppClient {
   async initialize() {
     console.log('🔌 Initializing Representative Agent...');
 
+    // 1. Try to acquire session lock
+    console.log('🔒 Attempting to acquire session lock...');
+    const lockAcquired = await sessionManager.waitForLock(30000); // Wait up to 30 seconds
+
+    if (!lockAcquired) {
+      console.log('❌ Could not acquire session lock. Another instance is running.');
+      console.log('💡 If you believe this is an error, wait 5 minutes for the lock to expire or manually clear the session_lock table.');
+      process.exit(1);
+      return;
+    }
+
+    console.log('✅ Session lock acquired. Proceeding with connection...');
+
     // Use Postgres Auth for persistence
     const { state, saveCreds } = await usePostgresAuthState('whatsapp_session');
 
@@ -50,7 +64,12 @@ export class WhatsAppClient {
       logger: pino({ level: 'silent' }) as any,
       auth: state,
       browser: ['Representative', 'Chrome', '1.0.0'],
-      syncFullHistory: false
+      syncFullHistory: false,
+      // Add retry configuration
+      retryRequestDelayMs: 500,
+      maxMsgRetryCount: 3,
+      // Prevent auto-reconnect on conflict
+      shouldIgnoreJid: () => false,
     });
 
     this.sock.ev.on('creds.update', saveCreds);
@@ -72,10 +91,32 @@ export class WhatsAppClient {
         console.log('   Status Code:', error);
         console.log('   Error Data:', errorData);
 
-        // Handle specific error codes
+        // Handle conflict (440) - another instance connected
+        if (error === 440 && errorData?.tag === 'conflict') {
+          console.log('❌ Session conflict detected (440: replaced).');
+          console.log('   This means another instance connected with the same credentials.');
+          console.log('💡 Releasing lock and exiting to prevent conflict loop...');
+
+          // Release our lock since we've been replaced
+          await sessionManager.releaseLock();
+          process.exit(1);
+          return;
+        }
+
+        // Handle corrupted session (405)
         if (error === 405) {
           console.log('❌ Session data is corrupted or invalid (405 error).');
           console.log('💡 Solution: Run "npx ts-node scripts/clear-auth.ts" to clear session and generate a new QR code.');
+          await sessionManager.releaseLock();
+          process.exit(1);
+          return;
+        }
+
+        // Handle decryption errors (usually means corrupted keys)
+        if (lastDisconnect?.error?.message?.includes('Unsupported state or unable to authenticate data')) {
+          console.log('❌ Decryption error detected. Session keys are corrupted.');
+          console.log('💡 Solution: Clear the auth_credentials table and restart to get a new QR code.');
+          await sessionManager.releaseLock();
           process.exit(1);
           return;
         }
@@ -100,6 +141,7 @@ export class WhatsAppClient {
           setTimeout(() => this.initialize(), delay);
         } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
           console.log('❌ Max reconnection attempts reached. Please check your connection and try again.');
+          await sessionManager.releaseLock();
           process.exit(1);
         }
       } else if (connection === 'open') {

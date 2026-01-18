@@ -9,7 +9,8 @@
     "build": "tsc",
     "lint": "eslint src/**/*.ts",
     "db:push": "drizzle-kit push:pg",
-    "clear-auth": "ts-node scripts/clear-auth.ts"
+    "clear-auth": "ts-node scripts/clear-auth.ts",
+    "migrate": "ts-node scripts/run-migration.ts"
   },
   "engines": {
     "node": ">=20.0.0"

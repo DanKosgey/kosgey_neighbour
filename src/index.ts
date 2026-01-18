@@ -6,6 +6,7 @@ import { WhatsAppClient } from './core/whatsapp';
 import { db } from './database';
 import { contacts, messageLogs } from './database/schema';
 import { eq, desc, sql } from 'drizzle-orm';
+import { sessionManager } from './services/sessionManager';
 
 const app = express();
 app.use(cors());
@@ -146,8 +147,13 @@ const start = async () => {
         console.log('✨ System Operational. Waiting for messages...');
 
         // Graceful Shutdown
-        const shutdown = () => {
-            console.log('🛑 Shutting down...');
+        const shutdown = async () => {
+            console.log('🛑 Shutting down gracefully...');
+
+            // Release session lock
+            await sessionManager.releaseLock();
+            console.log('✅ Session lock released');
+
             process.exit(0);
         };
 
@@ -156,6 +162,7 @@ const start = async () => {
 
     } catch (error) {
         console.error('❌ Fatal Error:', error);
+        await sessionManager.releaseLock();
         process.exit(1);
     }
 };

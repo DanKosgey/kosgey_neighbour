@@ -8,25 +8,25 @@ export class MessageBuffer {
     private buffers: Map<string, string[]> = new Map();
     private timers: Map<string, NodeJS.Timeout> = new Map();
 
-    // Adaptive Config: Base 10 seconds for quick responses
+    // Adaptive Config: Base 60 seconds to allow users to complete their thoughts
     // Increases when multiple people message at once
-    private readonly BASE_DEBOUNCE_MS = 10000; // 10 seconds base (quick response)
-    private readonly MAX_DEBOUNCE_MS = 30000; // 30 seconds max
+    private readonly BASE_DEBOUNCE_MS = 60000; // 60 seconds base (1 minute)
+    private readonly MAX_DEBOUNCE_MS = 120000; // 120 seconds max (2 minutes)
 
     constructor(private processBatchCallback: (jid: string, messages: string[]) => Promise<void>) { }
 
     /**
      * Calculate adaptive debounce time based on active conversations
-     * Minimum 10 seconds for quick responses
+     * Minimum 60 seconds to allow users to complete their thoughts
      */
     private getAdaptiveDebounce(): number {
         const activeConversations = this.buffers.size;
 
-        // Quick responses for single conversation
-        if (activeConversations === 1) return this.BASE_DEBOUNCE_MS; // 10s
-        if (activeConversations <= 3) return 15000; // 15s for 2-3 people
-        if (activeConversations <= 10) return 20000; // 20s for 4-10 people
-        return this.MAX_DEBOUNCE_MS; // 30s for 10+ people
+        // Allow time for users to complete their thoughts
+        if (activeConversations === 1) return this.BASE_DEBOUNCE_MS; // 60s
+        if (activeConversations <= 3) return 75000; // 75s for 2-3 people
+        if (activeConversations <= 10) return 90000; // 90s for 4-10 people
+        return this.MAX_DEBOUNCE_MS; // 120s for 10+ people
     }
 
     /**

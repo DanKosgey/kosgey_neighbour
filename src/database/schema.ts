@@ -38,7 +38,16 @@ export const authCredentials = pgTable('auth_credentials', {
     value: text('value').notNull(), // JSON stringified auth data
 });
 
-// 4. Conversations: The Smart Snitch Sessions
+// 4. Session Lock: Prevent multiple instances from connecting
+export const sessionLock = pgTable('session_lock', {
+    id: serial('id').primaryKey(),
+    sessionName: varchar('session_name', { length: 100 }).notNull().unique(),
+    instanceId: text('instance_id').notNull(), // Unique ID for this process
+    lockedAt: timestamp('locked_at').defaultNow(),
+    expiresAt: timestamp('expires_at').notNull(), // Auto-expire after 5 minutes
+});
+
+// 5. Conversations: The Smart Snitch Sessions
 export const conversations = pgTable('conversations', {
     id: serial('id').primaryKey(),
     contactPhone: varchar('contact_phone', { length: 20 }).references(() => contacts.phone),
