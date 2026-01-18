@@ -188,8 +188,9 @@ app.post('/api/disconnect', async (req, res) => {
 });
 
 app.post('/api/settings', (req, res) => {
-    // TODO: Implement settings update
-    res.json({ success: true });
+    // Placeholder for future settings updates (e.g. system prompt, auto-reply toggle)
+    // Currently settings are handled via environment variables or client-side storage.
+    res.json({ success: true, message: 'Settings endpoint is currently a placeholder.' });
 });
 
 const start = async () => {
