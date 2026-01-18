@@ -4,14 +4,42 @@ import { SYSTEM_PROMPTS } from './prompts';
 import { AI_TOOLS } from './tools';
 import { keyManager } from '../keyManager';
 
+// Global request queue to prevent simultaneous API calls
+let requestQueue: Promise<any> = Promise.resolve();
+const MIN_REQUEST_SPACING_MS = 3000; // 3 seconds between requests (Gemini free tier: 2 RPM = 30s/request)
+
 export class GeminiService {
 
   constructor() { }
 
   /**
    * Helper to execute Gemini operations with Key Rotation & Retries
+   * Now includes global queueing to prevent simultaneous requests
    */
   private async executeWithRetry<T>(operation: (model: GenerativeModel) => Promise<T>): Promise<T> {
+    // Queue this request to ensure sequential execution
+    return new Promise((resolve, reject) => {
+      requestQueue = requestQueue.then(async () => {
+        const startTime = Date.now();
+
+        try {
+          const result = await this._executeWithRetryInternal(operation);
+
+          // Ensure minimum spacing between requests
+          const elapsed = Date.now() - startTime;
+          if (elapsed < MIN_REQUEST_SPACING_MS) {
+            await new Promise(r => setTimeout(r, MIN_REQUEST_SPACING_MS - elapsed));
+          }
+
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      }).catch(reject);
+    });
+  }
+
+  private async _executeWithRetryInternal<T>(operation: (model: GenerativeModel) => Promise<T>): Promise<T> {
     let lasterror: any;
 
     // Try up to the number of available keys + some buffer, or until exhausted
@@ -42,6 +70,9 @@ export class GeminiService {
 
           console.warn(`⚠️ Key ending in ...${key.slice(-4)} hit Rate Limit (429). Switching keys...`);
           keyManager.markRateLimited(key, seconds);
+
+          // Add delay before trying next key to avoid exhausting all keys rapidly
+          await new Promise(resolve => setTimeout(resolve, 2000));
           continue;
         }
 

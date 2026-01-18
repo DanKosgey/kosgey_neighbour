@@ -390,8 +390,8 @@ export class WhatsAppClient {
   private async runProfiling(history: string[], contact: any) {
     if (rateLimitManager.isLimited()) return; // Double check
 
-    // Add slight random delay to avoid hitting rate limit immediately after response
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Add delay to avoid hitting rate limit immediately after response (Gemini free tier: 2 RPM)
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
     const profileUpdate = await geminiService.updateProfile(history, contact.summary || "");
 
