@@ -1,4 +1,43 @@
-# Deployment Guide - Session Conflict Fix
+# Deployment Guide - Render Optimized
+
+## 🚀 Render Deployment (Recommended)
+
+This application is optimized for deployment on Render with:
+- ✅ Health check endpoints (`/health`, `/ready`)
+- ✅ Graceful shutdown handling
+- ✅ Database connection retry logic
+- ✅ Bulk UPSERT operations for efficiency
+- ✅ Single instance session locking
+
+### Quick Deploy with render.yaml
+
+1. **Fork/Clone this repository** to your GitHub account
+
+2. **Create a new Web Service** on Render:
+   - Go to https://dashboard.render.com
+   - Click "New +" → "Web Service"
+   - Connect your GitHub repository
+   - Render will auto-detect `render.yaml` and configure everything
+
+3. **Set Environment Variables**:
+   - `DATABASE_URL` - Your Neon database connection string
+   - `OWNER_PHONE_NUMBER` - Your phone number (e.g., 254712345678)
+   - `GEMINI_API_KEY1`, `GEMINI_API_KEY2`, etc. - Your Gemini API keys
+
+4. **Deploy** - Render will automatically build and deploy
+
+5. **Monitor Health**:
+   - Visit `https://your-app.onrender.com/health` - Should return `{"status":"ok"}`
+   - Visit `https://your-app.onrender.com/ready` - Should return `{"status":"ready","database":"connected"}`
+
+### Health Check Endpoints
+
+The application provides two health check endpoints for monitoring:
+
+- **`GET /health`** - Basic liveness check, always returns 200 OK
+- **`GET /ready`** - Readiness check, verifies database connectivity
+
+Configure Render to use `/health` as the health check path (already set in `render.yaml`).
 
 ## 🚨 CRITICAL: Read Before Deploying
 

@@ -1,0 +1,17 @@
+node_modules
+dist
+.git
+.env
+.env.local
+*.log
+npm-debug.log*
+.DS_Store
+docs
+scripts
+migrations
+temp_*
+*.md
+!README.md
+tsconfig.json
+drizzle.config.ts
+.gitignore

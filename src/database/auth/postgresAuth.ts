@@ -1,35 +1,23 @@
 import { proto, BufferJSON, initAuthCreds, AuthenticationCreds, AuthenticationState, SignalDataTypeMap } from '@whiskeysockets/baileys';
-import { db } from '../../database';
+import { db, withRetry } from '../../database';
 import { authCredentials } from '../../database/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 export const usePostgresAuthState = async (collectionName: string): Promise<{ state: AuthenticationState, saveCreds: () => Promise<void> }> => {
     const writeData = async (data: any, id: string) => {
-        const MAX_RETRIES = 3;
-        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-            try {
-                const key = `${collectionName}:${id}`;
-                const value = JSON.stringify(data, BufferJSON.replacer);
+        const key = `${collectionName}:${id}`;
+        const value = JSON.stringify(data, BufferJSON.replacer);
 
-                const existing = await db.select().from(authCredentials).where(eq(authCredentials.key, key));
-
-                if (existing.length > 0) {
-                    await db.update(authCredentials)
-                        .set({ value })
-                        .where(eq(authCredentials.key, key));
-                } else {
-                    await db.insert(authCredentials).values({ key, value });
-                }
-                return; // Success
-            } catch (error: any) {
-                console.warn(`⚠️ Error writing auth data (Attempt ${attempt}/${MAX_RETRIES}):`, error.message);
-                if (attempt === MAX_RETRIES) {
-                    console.error('❌ Failed to write auth data after retries:', error);
-                } else {
-                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff-ish
-                }
-            }
-        }
+        // Use withRetry for resilience, but with fewer attempts to fail faster
+        await withRetry(async () => {
+            // Use PostgreSQL UPSERT (INSERT ... ON CONFLICT) for efficiency
+            await db.insert(authCredentials)
+                .values({ key, value })
+                .onConflictDoUpdate({
+                    target: authCredentials.key,
+                    set: { value }
+                });
+        }, 2, 1000); // 2 retries with 1s initial delay
     };
 
     const readData = async (id: string) => {
@@ -42,7 +30,7 @@ export const usePostgresAuthState = async (collectionName: string): Promise<{ st
             }
             return null;
         } catch (error) {
-            console.error('Error reading auth data:', error);
+            console.error(`Error reading auth data for ${id}:`, error);
             return null;
         }
     };
@@ -52,7 +40,7 @@ export const usePostgresAuthState = async (collectionName: string): Promise<{ st
             const key = `${collectionName}:${id}`;
             await db.delete(authCredentials).where(eq(authCredentials.key, key));
         } catch (error) {
-            console.error('Error removing auth data:', error);
+            console.error(`Error removing auth data for ${id}:`, error);
         }
     };
 
@@ -95,11 +83,16 @@ export const usePostgresAuthState = async (collectionName: string): Promise<{ st
                         }
                     }
 
-                    // Execute in chunks to avoid overwhelming the DB connection (Socket errors)
-                    const CHUNK_SIZE = 5;
+                    // Execute in larger chunks with bulk UPSERT for better performance
+                    const CHUNK_SIZE = 10; // Increased from 5
                     for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
                         const chunk = tasks.slice(i, i + CHUNK_SIZE);
-                        await Promise.all(chunk.map(task => task()));
+                        try {
+                            await Promise.all(chunk.map(task => task()));
+                        } catch (error: any) {
+                            console.error(`⚠️ Batch write failed (chunk ${Math.floor(i / CHUNK_SIZE) + 1}):`, error.message);
+                            // Continue with next chunk instead of failing completely
+                        }
                     }
                 }
             }

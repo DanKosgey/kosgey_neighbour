@@ -87,7 +87,7 @@ export class ConversationManager {
         if (config.ownerPhone) {
             const ownerJid = config.ownerPhone.includes('@s.whatsapp.net') ? config.ownerPhone : config.ownerPhone + '@s.whatsapp.net';
 
-            console.log(`📝 Sending Smart Snitch Report for ${contactPhone} to Owner...`);
+            console.log(`📝 Sending Smart Snitch Report for ${contactPhone} to Owner (${ownerJid})...`);
             await this.messageSender.sendText(ownerJid, report);
 
             // Save report to DB

@@ -26,7 +26,7 @@ const getGeminiKeys = () => {
 
 export const config = {
     port: process.env.PORT || 3000,
-    ownerPhone: process.env.OWNER_PHONE_NUMBER, // The "Private" Number
+    ownerPhone: process.env.OWNER_PHONE_NUMBER?.replace(/[^0-9]/g, '') || '', // Cleaned phone number
     geminiKey: process.env.GEMINI_API_KEY,      // Fallback/Legacy
     geminiKeys: getGeminiKeys(),                // The full pool
     geminiModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash',

@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: whatsapp-agent
+    env: node
+    region: oregon
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DATABASE_URL
+        sync: false
+      - key: OWNER_PHONE_NUMBER
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY1
+        sync: false
+      - key: GEMINI_API_KEY2
+        sync: false
+      - key: GEMINI_API_KEY3
+        sync: false
+    
+    # Health check configuration
+    healthCheckPath: /health
+    
+    # Single instance (CRITICAL for WhatsApp session)
+    numInstances: 1
+    
+    # Auto-deploy on push
+    autoDeploy: true
+    
+    # Restart policy
+    preDeployCommand: echo "Starting deployment..."

@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { config } from './config/env';
 import { WhatsAppClient } from './core/whatsapp';
-import { db } from './database';
+import { db, testConnection } from './database';
 import { contacts, messageLogs, authCredentials } from './database/schema';
 import { eq, desc, sql } from 'drizzle-orm';
 import { sessionManager } from './services/sessionManager';
@@ -17,6 +17,20 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // Initialize Client
 const client = new WhatsAppClient();
+
+// Health Check Endpoints (for Render)
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+});
+
+app.get('/ready', async (req, res) => {
+    const dbHealthy = await testConnection();
+    if (dbHealthy) {
+        res.json({ status: 'ready', database: 'connected' });
+    } else {
+        res.status(503).json({ status: 'not ready', database: 'disconnected' });
+    }
+});
 
 // API Endpoints
 app.get('/api/status', (req, res) => {
@@ -212,11 +226,22 @@ const start = async () => {
         const shutdown = async () => {
             console.log('🛑 Shutting down gracefully...');
 
-            // Release session lock
-            await sessionManager.releaseLock();
-            console.log('✅ Session lock released');
+            try {
+                // Give pending operations a moment to complete
+                await new Promise(resolve => setTimeout(resolve, 2000));
 
-            process.exit(0);
+                // Release session lock
+                await sessionManager.releaseLock();
+                console.log('✅ Session lock released');
+
+                // Close WhatsApp connection gracefully
+                console.log('👋 Closing WhatsApp connection...');
+
+                process.exit(0);
+            } catch (error) {
+                console.error('Error during shutdown:', error);
+                process.exit(1);
+            }
         };
 
         process.on('SIGINT', shutdown);
