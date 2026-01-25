@@ -12,6 +12,4 @@ migrations
 temp_*
 *.md
 !README.md
-tsconfig.json
-drizzle.config.ts
 .gitignore
