@@ -241,7 +241,25 @@ export class WhatsAppClient {
     if (!text) return;
     if (remoteJid === 'status@broadcast') return;
 
-    console.log(`📥 Incoming: ${remoteJid} ("${text}")`);
+    // Filter: Only respond to personal/direct messages (DMs)
+    // Ignore group chats (@g.us) and broadcast channels (@broadcast, @newsletter)
+    if (remoteJid.endsWith('@g.us')) {
+      console.log(`⏩ Skipping: Group message from ${remoteJid}`);
+      return;
+    }
+
+    if (remoteJid.includes('@broadcast') || remoteJid.includes('@newsletter')) {
+      console.log(`⏩ Skipping: Broadcast/Channel message from ${remoteJid}`);
+      return;
+    }
+
+    // Only process personal messages (ending with @s.whatsapp.net)
+    if (!remoteJid.endsWith('@s.whatsapp.net')) {
+      console.log(`⏩ Skipping: Unknown JID format ${remoteJid}`);
+      return;
+    }
+
+    console.log(`📥 Incoming DM: ${remoteJid} ("${text}")`);
 
     // Check OWNER Logic
     if (ownerService.isOwner(remoteJid)) {
