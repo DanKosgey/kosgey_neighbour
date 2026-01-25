@@ -414,10 +414,10 @@ function initializeSettings() {
 
     // Disconnect button
     document.getElementById('disconnect-btn').addEventListener('click', async () => {
-        if (confirm('Are you sure you want to disconnect WhatsApp? This will log you out and you will need to scan the QR code again.')) {
+        if (confirm('Are you sure you want to disconnect WhatsApp? You will need to scan the QR code again to reconnect.')) {
             const btn = document.getElementById('disconnect-btn');
             const originalText = btn.textContent;
-            btn.textContent = 'Disconnecting & Restarting...';
+            btn.textContent = 'Disconnecting...';
             btn.disabled = true;
 
             try {
@@ -425,30 +425,20 @@ function initializeSettings() {
                 const data = await response.json();
 
                 if (data.success) {
-                    btn.textContent = 'Rebooting Server... (Please wait)';
-                    alert('Disconnected successfully. The server is restarting to clear the session. Please wait about 30 seconds for the page to reload automatically.');
+                    btn.textContent = 'Disconnected ✓';
 
-                    // Poll for server
-                    let attempts = 0;
-                    const checkServer = async () => {
-                        attempts++;
-                        try {
-                            const statusRes = await fetch(`${API_BASE}/api/status`);
-                            if (statusRes.ok) {
-                                window.location.reload();
-                                return;
-                            }
-                        } catch (e) { console.log('Server down...'); }
+                    // Show success message
+                    alert('Disconnected successfully! The app will now show a QR code for you to scan.');
 
-                        // Retry for 2 mins
-                        if (attempts < 60) setTimeout(checkServer, 2000);
-                        else {
-                            alert('Server restart took too long. Please refresh manually.');
-                            window.location.reload();
-                        }
-                    };
-                    setTimeout(checkServer, 2000);
+                    // Switch to dashboard to show QR code
+                    switchPage('dashboard');
 
+                    // Force status check to update UI
+                    setTimeout(() => {
+                        checkStatus();
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    }, 1000);
                 } else {
                     throw new Error(data.error || 'Disconnect failed');
                 }

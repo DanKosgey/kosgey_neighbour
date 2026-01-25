@@ -37,6 +37,28 @@ export class WhatsAppClient {
     };
   }
 
+  public async logout(): Promise<void> {
+    try {
+      if (this.sock) {
+        console.log('📤 Logging out from WhatsApp...');
+        await this.sock.logout();
+        this.sock = undefined;
+        this.qrCode = null;
+        this.reconnectAttempts = 0;
+        console.log('✅ Logged out successfully');
+
+        // Reinitialize to get new QR code
+        setTimeout(() => this.initialize(), 2000);
+      } else {
+        console.log('⚠️ No active connection to logout from');
+      }
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+      throw error;
+    }
+  }
+
+
   async initialize() {
     console.log('🔌 Initializing Representative Agent...');
 

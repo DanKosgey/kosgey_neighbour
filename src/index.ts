@@ -177,23 +177,23 @@ app.post('/api/disconnect', async (req, res) => {
     try {
         console.log('🔌 Disconnect requested via API');
 
-        // 1. Release Session Lock
+        // 1. Logout from WhatsApp gracefully
+        await client.logout();
+
+        // 2. Release Session Lock
         await sessionManager.releaseLock();
 
-        // 2. Clear Auth Credentials to force logout
+        // 3. Clear Auth Credentials
         await db.delete(authCredentials);
 
-        console.log('✅ Auth credentials cleared and lock released.');
+        console.log('✅ Disconnected successfully. Ready for new QR scan.');
 
-        // 3. Send success response before exiting
-        res.json({ success: true, message: 'Disconnected. Service will restart and wait for new QR.' });
-
-        // 4. Force exit to restart service (Render will restart it)
-        // Give it a moment to send the response
-        setTimeout(() => {
-            console.log('👋 Exiting process to trigger restart...');
-            process.exit(0);
-        }, 1000);
+        // 4. Send success response (NO process.exit!)
+        res.json({
+            success: true,
+            message: 'Disconnected successfully. Scan QR code to reconnect.',
+            requiresRestart: false
+        });
 
     } catch (error) {
         console.error('Disconnect failed:', error);
