@@ -28,7 +28,18 @@ export class OwnerService {
         const normalizedOwner = this.ownerPhone.replace(/[\+\s]/g, '');
         const normalizedPhone = phone.replace(/[\+\s]/g, '');
 
-        return normalizedPhone === normalizedOwner;
+        // Check if it matches the main phone number
+        if (normalizedPhone === normalizedOwner) return true;
+
+        // Check/Hardcode the specific LID for Kosgey if desired or add logic
+        // For now, let's just log the mismatch for debugging if needed, but return false
+        // unless we add the LID to the allowed list.
+
+        // Allow the LID seen in logs explicitly if it matches the 'known' lid
+        // We will read this from config if present
+        if (config.ownerLid && normalizedPhone === config.ownerLid) return true;
+
+        return false;
     }
 
     /**

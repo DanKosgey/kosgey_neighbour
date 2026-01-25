@@ -25,11 +25,12 @@
 
 3. **Set Environment Variables** in Render dashboard:
    ```
-   DATABASE_URL=postgres://user:pass@ep-xxx.neon.tech/neondb?sslmode=require
-   OWNER_PHONE_NUMBER=254712345678
-   GEMINI_API_KEY1=AIzaSy...
-   GEMINI_API_KEY2=AIzaSy...
-   GEMINI_API_KEY3=AIzaSy...
+   - `DATABASE_URL` - Your Neon database connection string
+   - `OWNER_PHONE_NUMBER` - Your phone number (e.g., 254712345678)
+   - `OWNER_LID` - Your WhatsApp Account ID (LID) for explicit identity recognition (e.g. `128724850720810`)
+   - `GEMINI_API_KEY1` - Your first Gemini API key
+   - `GEMINI_API_KEY2` - Your second Gemini API key (optional, for rate limiting)
+   - `GEMINI_API_KEY3` - Your third Gemini API key (optional, for rate limiting)
    ```
 
 4. **Deploy** - Render will build and start your service

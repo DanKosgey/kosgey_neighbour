@@ -8,7 +8,7 @@ export const usePostgresAuthState = async (collectionName: string): Promise<{ st
         const key = `${collectionName}:${id}`;
         const value = JSON.stringify(data, BufferJSON.replacer);
 
-        // Use withRetry for resilience, but with fewer attempts to fail faster
+        // Use withRetry for resilience
         await withRetry(async () => {
             // Use PostgreSQL UPSERT (INSERT ... ON CONFLICT) for efficiency
             await db.insert(authCredentials)
@@ -17,7 +17,7 @@ export const usePostgresAuthState = async (collectionName: string): Promise<{ st
                     target: authCredentials.key,
                     set: { value }
                 });
-        }, 2, 1000); // 2 retries with 1s initial delay
+        }, 3, 1000); // 3 retries (was 2)
     };
 
     const readData = async (id: string) => {
@@ -52,16 +52,29 @@ export const usePostgresAuthState = async (collectionName: string): Promise<{ st
             keys: {
                 get: async (type, ids) => {
                     const data: { [key: string]: SignalDataTypeMap[typeof type] } = {};
-                    await Promise.all(
-                        ids.map(async (id) => {
-                            const value = await readData(`${type}:${id}`);
-                            if (type === 'app-state-sync-key' && value) {
-                                data[id] = proto.Message.AppStateSyncKeyData.fromObject(value) as any;
-                            } else if (value) {
-                                data[id] = value;
-                            }
-                        })
-                    );
+
+                    // Process reads in chunks to prevent DB connection timeouts
+                    const READ_CHUNK_SIZE = 20;
+                    for (let i = 0; i < ids.length; i += READ_CHUNK_SIZE) {
+                        const chunk = ids.slice(i, i + READ_CHUNK_SIZE);
+
+                        await Promise.all(
+                            chunk.map(async (id) => {
+                                const value = await readData(`${type}:${id}`);
+                                if (type === 'app-state-sync-key' && value) {
+                                    data[id] = proto.Message.AppStateSyncKeyData.fromObject(value) as any;
+                                } else if (value) {
+                                    data[id] = value;
+                                }
+                            })
+                        );
+
+                        // Small delay between chunks to yield to event loop and prevent rate limits
+                        if (i + READ_CHUNK_SIZE < ids.length) {
+                            await new Promise(resolve => setTimeout(resolve, 50));
+                        }
+                    }
+
                     return data;
                 },
                 set: async (data) => {
@@ -84,11 +97,18 @@ export const usePostgresAuthState = async (collectionName: string): Promise<{ st
                     }
 
                     // Execute in larger chunks with bulk UPSERT for better performance
-                    const CHUNK_SIZE = 10; // Increased from 5
+                    const CHUNK_SIZE = 50; // Increased from 10 to 50 for better throughput
                     for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
                         const chunk = tasks.slice(i, i + CHUNK_SIZE);
                         try {
-                            await Promise.all(chunk.map(task => task()));
+                            await withRetry(async () => {
+                                await Promise.all(chunk.map(task => task()));
+                            }, 3, 500);
+
+                            // Small delay to prevent rate limiting
+                            if (i + CHUNK_SIZE < tasks.length) {
+                                await new Promise(resolve => setTimeout(resolve, 100));
+                            }
                         } catch (error: any) {
                             console.error(`⚠️ Batch write failed (chunk ${Math.floor(i / CHUNK_SIZE) + 1}):`, error.message);
                             // Continue with next chunk instead of failing completely

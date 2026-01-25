@@ -1,7 +1,7 @@
 import makeWASocket, { DisconnectReason, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import { config } from '../config/env';
-import { db } from '../database';
+import { db, withRetry } from '../database';
 import { contacts, messageLogs } from '../database/schema';
 import { eq, desc } from 'drizzle-orm';
 import { geminiService } from '../services/ai/gemini';
@@ -229,23 +229,29 @@ export class WhatsAppClient {
     }
 
     // 1. Ensure Contact Exists (So we don't lose PushName info)
-    let contact = await db.select().from(contacts).where(eq(contacts.phone, remoteJid)).then(res => res[0]);
+    let contact = await withRetry(async () => {
+      return await db.select().from(contacts).where(eq(contacts.phone, remoteJid)).then(res => res[0]);
+    });
 
     if (!contact) {
       console.log('✨ New Contact Detected! Creating profile...');
-      const newContacts = await db.insert(contacts).values({
-        phone: remoteJid,
-        originalPushname: pushName,
-        name: IdentityValidator.extractDisplayName(pushName) || 'Unknown',
-        summary: 'New contact. Interaction started.',
-        trustLevel: 0,
-        isVerified: false
-      }).returning();
+      const newContacts = await withRetry(async () => {
+        return await db.insert(contacts).values({
+          phone: remoteJid,
+          originalPushname: pushName,
+          name: IdentityValidator.extractDisplayName(pushName) || 'Unknown',
+          summary: 'New contact. Interaction started.',
+          trustLevel: 0,
+          isVerified: false
+        }).returning();
+      });
       contact = newContacts[0];
     } else {
       // Update PushName if missing
       if (!contact.originalPushname && pushName) {
-        await db.update(contacts).set({ originalPushname: pushName }).where(eq(contacts.phone, remoteJid));
+        await withRetry(async () => {
+          await db.update(contacts).set({ originalPushname: pushName }).where(eq(contacts.phone, remoteJid));
+        });
       }
     }
 
@@ -287,7 +293,9 @@ export class WhatsAppClient {
     }
 
     // 2. Get Contact
-    const contact = await db.select().from(contacts).where(eq(contacts.phone, remoteJid)).then(res => res[0]);
+    const contact = await withRetry(async () => {
+      return await db.select().from(contacts).where(eq(contacts.phone, remoteJid)).then(res => res[0]);
+    });
     if (!contact) return;
 
     // --- SNITCH REPORT (New Contact Alert) ---
@@ -297,7 +305,9 @@ export class WhatsAppClient {
       if (contact.summary?.includes('New contact')) {
         await notificationService.sendSnitchReport(remoteJid, contact.name || 'Unknown', fullText);
         // Update summary so we don't snitch again immediately
-        await db.update(contacts).set({ summary: 'New contact. Owner notified.' }).where(eq(contacts.phone, remoteJid));
+        await withRetry(async () => {
+          await db.update(contacts).set({ summary: 'New contact. Owner notified.' }).where(eq(contacts.phone, remoteJid));
+        });
       }
     }
 
@@ -308,12 +318,14 @@ export class WhatsAppClient {
       const extractedName = IdentityValidator.extractNameFromMessage(fullText);
       if (extractedName) {
         console.log(`✅ Identity Discovered: ${extractedName}`);
-        await db.update(contacts).set({
-          confirmedName: extractedName,
-          name: extractedName,
-          isVerified: true,
-          summary: `${contact.summary || ''}\n[Identity Confirmed: ${extractedName}]`
-        }).where(eq(contacts.phone, remoteJid));
+        await withRetry(async () => {
+          await db.update(contacts).set({
+            confirmedName: extractedName,
+            name: extractedName,
+            isVerified: true,
+            summary: `${contact.summary || ''}\n[Identity Confirmed: ${extractedName}]`
+          }).where(eq(contacts.phone, remoteJid));
+        });
         contact.name = extractedName;
         contact.isVerified = true;
       } else {
@@ -325,19 +337,23 @@ export class WhatsAppClient {
     }
 
     // 4. Load History
-    const historyLogs = await db.select()
-      .from(messageLogs)
-      .where(eq(messageLogs.contactPhone, remoteJid))
-      .orderBy(desc(messageLogs.createdAt))
-      .limit(10);
+    const historyLogs = await withRetry(async () => {
+      return await db.select()
+        .from(messageLogs)
+        .where(eq(messageLogs.contactPhone, remoteJid))
+        .orderBy(desc(messageLogs.createdAt))
+        .limit(10);
+    });
 
     const history = historyLogs.reverse().map(m => `${m.role === 'agent' ? 'Me' : 'Them'}: ${m.content}`);
 
     // Log User Input
-    await db.insert(messageLogs).values({
-      contactPhone: remoteJid,
-      role: 'user',
-      content: fullText
+    await withRetry(async () => {
+      await db.insert(messageLogs).values({
+        contactPhone: remoteJid,
+        role: 'user',
+        content: fullText
+      });
     });
 
     // 5. Generate Response
@@ -436,10 +452,12 @@ export class WhatsAppClient {
     }
 
     // Log Outgoing
-    await db.insert(messageLogs).values({
-      contactPhone: remoteJid,
-      role: 'agent',
-      content: finalResponse
+    await withRetry(async () => {
+      await db.insert(messageLogs).values({
+        contactPhone: remoteJid,
+        role: 'agent',
+        content: finalResponse
+      });
     });
 
     // Manage Session
@@ -469,13 +487,15 @@ export class WhatsAppClient {
     if (profileUpdate) {
       console.log(`📝 Updating profile for ${contact.phone}...`);
 
-      await db.update(contacts)
-        .set({
-          name: profileUpdate.name || contact.name,
-          summary: profileUpdate.summary,
-          trustLevel: profileUpdate.trust_level
-        })
-        .where(eq(contacts.phone, contact.phone));
+      await withRetry(async () => {
+        await db.update(contacts)
+          .set({
+            name: profileUpdate.name || contact.name,
+            summary: profileUpdate.summary,
+            trustLevel: profileUpdate.trust_level
+          })
+          .where(eq(contacts.phone, contact.phone));
+      });
 
       // 6. Alert Owner if Action Required
       if (profileUpdate.action_required && config.ownerPhone) {

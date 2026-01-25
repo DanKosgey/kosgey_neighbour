@@ -2,7 +2,7 @@
  * Session Manager Service
  * Prevents multiple instances from connecting to WhatsApp simultaneously
  */
-import { db } from '../database';
+import { db, withRetry } from '../database';
 import { sessionLock } from '../database/schema';
 import { eq, and, lt } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
@@ -29,13 +29,17 @@ export class SessionManager {
             const expiresAt = new Date(now.getTime() + 2 * 60 * 1000); // 2 minutes
 
             // First, clean up any expired locks
-            await db.delete(sessionLock)
-                .where(lt(sessionLock.expiresAt, now));
+            await withRetry(async () => {
+                await db.delete(sessionLock)
+                    .where(lt(sessionLock.expiresAt, now));
+            });
 
             // Try to acquire lock
-            const existing = await db.select()
-                .from(sessionLock)
-                .where(eq(sessionLock.sessionName, this.sessionName));
+            const existing = await withRetry(async () => {
+                return await db.select()
+                    .from(sessionLock)
+                    .where(eq(sessionLock.sessionName, this.sessionName));
+            });
 
             if (existing.length > 0) {
                 const lock = existing[0];
@@ -51,13 +55,15 @@ export class SessionManager {
                 // Check if lock is expired
                 if (new Date(lock.expiresAt) < now) {
                     console.log('🔓 Existing lock expired, taking over...');
-                    await db.update(sessionLock)
-                        .set({
-                            instanceId: this.instanceId,
-                            lockedAt: now,
-                            expiresAt: expiresAt
-                        })
-                        .where(eq(sessionLock.sessionName, this.sessionName));
+                    await withRetry(async () => {
+                        await db.update(sessionLock)
+                            .set({
+                                instanceId: this.instanceId,
+                                lockedAt: now,
+                                expiresAt: expiresAt
+                            })
+                            .where(eq(sessionLock.sessionName, this.sessionName));
+                    });
 
                     this.isLocked = true;
                     this.startLockRefresh();
@@ -71,11 +77,13 @@ export class SessionManager {
             }
 
             // No existing lock, create new one
-            await db.insert(sessionLock).values({
-                sessionName: this.sessionName,
-                instanceId: this.instanceId,
-                lockedAt: now,
-                expiresAt: expiresAt
+            await withRetry(async () => {
+                await db.insert(sessionLock).values({
+                    sessionName: this.sessionName,
+                    instanceId: this.instanceId,
+                    lockedAt: now,
+                    expiresAt: expiresAt
+                });
             });
 
             console.log('✅ Session lock acquired');
@@ -99,11 +107,13 @@ export class SessionManager {
                 this.lockRefreshInterval = null;
             }
 
-            await db.delete(sessionLock)
-                .where(and(
-                    eq(sessionLock.sessionName, this.sessionName),
-                    eq(sessionLock.instanceId, this.instanceId)
-                ));
+            await withRetry(async () => {
+                await db.delete(sessionLock)
+                    .where(and(
+                        eq(sessionLock.sessionName, this.sessionName),
+                        eq(sessionLock.instanceId, this.instanceId)
+                    ));
+            });
 
             this.isLocked = false;
             console.log('🔓 Session lock released');
@@ -120,22 +130,26 @@ export class SessionManager {
             clearInterval(this.lockRefreshInterval);
         }
 
+        // Refresh every 1 minute
         this.lockRefreshInterval = setInterval(async () => {
             try {
-                const expiresAt = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
+                // Use withRetry to prevent timeouts from crashing the refresher
+                await withRetry(async () => {
+                    const expiresAt = new Date(Date.now() + 2 * 60 * 1000); // 2 minutes
 
-                await db.update(sessionLock)
-                    .set({ expiresAt })
-                    .where(and(
-                        eq(sessionLock.sessionName, this.sessionName),
-                        eq(sessionLock.instanceId, this.instanceId)
-                    ));
+                    await db.update(sessionLock)
+                        .set({ expiresAt })
+                        .where(and(
+                            eq(sessionLock.sessionName, this.sessionName),
+                            eq(sessionLock.instanceId, this.instanceId)
+                        ));
+                }, 3, 2000); // 3 retries, 2s delay
 
-                console.log('🔄 Session lock refreshed');
             } catch (error: any) {
                 console.error('Error refreshing session lock:', error.message);
+                // Don't crash, just log and retry next interval
             }
-        }, 1 * 60 * 1000); // Refresh every 1 minute
+        }, 60000);
     }
 
     /**

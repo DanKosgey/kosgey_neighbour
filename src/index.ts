@@ -211,24 +211,32 @@ const start = async () => {
     try {
         console.log('🚀 Starting Autonomous Representative Agent...');
 
-        // 1. Initialize WhatsApp Client
-        await client.initialize();
-
-        // 2. Start API Server
+        // 1. Start API Server FIRST (so health checks pass immediately)
         const PORT = config.port;
-        app.listen(PORT, () => {
+        const server = app.listen(PORT, () => {
             console.log(`🌍 API Server running on port ${PORT}`);
+        });
+
+        // 2. Initialize WhatsApp Client (Async)
+        console.log('🔌 Initializing WhatsApp Client in background...');
+        client.initialize().catch(err => {
+            console.error('❌ Failed to initialize WhatsApp Client:', err);
+            // Don't exit process immediately, allow retry logic within initialize to work
+            // or let the server stay up for diagnostics
         });
 
         console.log('✨ System Operational. Waiting for messages...');
 
         // Graceful Shutdown
-        const shutdown = async () => {
-            console.log('🛑 Shutting down gracefully...');
+        const shutdown = async (signal: string) => {
+            console.log(`🛑 Received ${signal}. Shutting down gracefully...`);
 
             try {
+                // Stop server first
+                server.close();
+
                 // Give pending operations a moment to complete
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                await new Promise(resolve => setTimeout(resolve, 1000));
 
                 // Release session lock
                 await sessionManager.releaseLock();
@@ -244,8 +252,18 @@ const start = async () => {
             }
         };
 
-        process.on('SIGINT', shutdown);
-        process.on('SIGTERM', shutdown);
+        process.on('SIGINT', () => shutdown('SIGINT'));
+        process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+        // Global Error Handlers
+        process.on('uncaughtException', (err) => {
+            console.error('🔥 Uncaught Exception:', err);
+            // Ideally log to external service
+        });
+
+        process.on('unhandledRejection', (reason, promise) => {
+            console.error('🔥 Unhandled Rejection at:', promise, 'reason:', reason);
+        });
 
     } catch (error) {
         console.error('❌ Fatal Error:', error);

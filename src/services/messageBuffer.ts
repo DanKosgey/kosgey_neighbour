@@ -78,7 +78,9 @@ export class MessageBuffer {
 
         console.log(`🚀 Processing batch for ${jid}: ${messages.length} messages.`);
 
-        // Trigger callback
-        this.processBatchCallback(jid, messages);
+        // Trigger callback and catch errors
+        this.processBatchCallback(jid, messages).catch(err => {
+            console.error(`🔥 Error processing batch for ${jid}:`, err);
+        });
     }
 }

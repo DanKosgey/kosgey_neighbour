@@ -3,7 +3,7 @@ import { pgTable, text, serial, timestamp, boolean, varchar, integer, jsonb, ind
 // 1. Contacts: The Rolodex with Identity Validation
 export const contacts = pgTable('contacts', {
     id: serial('id').primaryKey(),
-    phone: varchar('phone', { length: 20 }).notNull().unique(), // +254...
+    phone: varchar('phone', { length: 50 }).notNull().unique(), // +254...
 
     // Identity fields
     originalPushname: text('original_pushname'), // Name from WhatsApp (for reference)
@@ -30,7 +30,7 @@ export const contacts = pgTable('contacts', {
 // 2. Message History: The Memory
 export const messageLogs = pgTable('message_logs', {
     id: serial('id').primaryKey(),
-    contactPhone: varchar('contact_phone', { length: 20 }).references(() => contacts.phone),
+    contactPhone: varchar('contact_phone', { length: 50 }).references(() => contacts.phone),
     role: varchar('role', { length: 10 }).notNull(), // 'agent' | 'user'
     content: text('content').notNull(),
     createdAt: timestamp('created_at').defaultNow(),
@@ -59,7 +59,7 @@ export const sessionLock = pgTable('session_lock', {
 // 5. Conversations: The Smart Snitch Sessions
 export const conversations = pgTable('conversations', {
     id: serial('id').primaryKey(),
-    contactPhone: varchar('contact_phone', { length: 20 }).references(() => contacts.phone),
+    contactPhone: varchar('contact_phone', { length: 50 }).references(() => contacts.phone),
     status: varchar('status', { length: 20 }).default('active'), // 'active' | 'completed'
     urgency: varchar('urgency', { length: 10 }), // 'red' | 'yellow' | 'green'
     summary: text('summary'), // The "Traffic Light" report content
