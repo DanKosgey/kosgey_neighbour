@@ -129,3 +129,38 @@ export const userProfile = pgTable('user_profile', {
     updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// 8. Message Queue: Advanced Queue System for Concurrent Processing
+export const messageQueue = pgTable('message_queue', {
+    id: serial('id').primaryKey(),
+    jid: varchar('jid', { length: 255 }).notNull(), // WhatsApp JID
+    messageData: jsonb('message_data').notNull(), // Array of messages
+    priority: integer('priority').default(2).notNull(), // 0=CRITICAL, 1=HIGH, 2=NORMAL, 3=LOW
+    status: varchar('status', { length: 50 }).default('pending').notNull(), // pending, processing, completed, failed
+    retryCount: integer('retry_count').default(0).notNull(),
+    workerId: varchar('worker_id', { length: 100 }), // Which worker is processing this
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at').defaultNow(),
+    processedAt: timestamp('processed_at'),
+}, (table) => {
+    return {
+        statusPriorityIdx: index('status_priority_idx').on(table.status, table.priority, table.createdAt),
+        jidIdx: index('jid_idx').on(table.jid),
+        workerIdx: index('worker_idx').on(table.workerId),
+    };
+});
+
+// 9. Queue Metrics: Performance Monitoring
+export const queueMetrics = pgTable('queue_metrics', {
+    id: serial('id').primaryKey(),
+    timestamp: timestamp('timestamp').defaultNow(),
+    queueDepth: integer('queue_depth').notNull(),
+    activeWorkers: integer('active_workers').notNull(),
+    messagesProcessed: integer('messages_processed').notNull(),
+    avgProcessingTimeMs: integer('avg_processing_time_ms'),
+    errorCount: integer('error_count').default(0),
+}, (table) => {
+    return {
+        timestampIdx: index('timestamp_idx').on(table.timestamp),
+    };
+});
+

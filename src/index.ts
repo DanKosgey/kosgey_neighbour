@@ -444,8 +444,9 @@ const start = async () => {
                 await sessionManager.releaseLock();
                 console.log('✅ Session lock released');
 
-                // Close WhatsApp connection gracefully
-                console.log('👋 Closing WhatsApp connection...');
+                // Gracefully shutdown queue system and WhatsApp connection
+                console.log('👋 Shutting down client and queues...');
+                await client.shutdown();
 
                 process.exit(0);
             } catch (error) {

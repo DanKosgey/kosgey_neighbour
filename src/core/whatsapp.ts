@@ -17,12 +17,17 @@ import { rateLimitManager } from '../services/rateLimitManager';
 import { ownerService } from '../services/ownerService';
 import { notificationService } from '../services/notificationService';
 import { sessionManager } from '../services/sessionManager';
+import { messageQueueService } from '../services/queue/messageQueue';
+import { WorkerPool } from '../services/queue/workerPool';
+import { ConcurrencyController } from '../services/queue/concurrencyController';
 
 export class WhatsAppClient {
   private sock: WASocket | undefined;
   private messageSender: MessageSender | undefined;
   private conversationManager: ConversationManager | undefined;
   private messageBuffer: MessageBuffer | undefined;
+  private workerPool: WorkerPool | undefined;
+  private concurrencyController: ConcurrencyController | undefined;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
   private qrCode: string | null = null; // Store QR code
@@ -54,6 +59,33 @@ export class WhatsAppClient {
       }
     } catch (error) {
       console.error('❌ Logout error:', error);
+      throw error;
+    }
+  }
+
+  public async shutdown(): Promise<void> {
+    console.log('🛑 Shutting down WhatsApp client...');
+
+    try {
+      // Stop concurrency controller
+      if (this.concurrencyController) {
+        this.concurrencyController.stop();
+      }
+
+      // Stop worker pool
+      if (this.workerPool) {
+        await this.workerPool.shutdown();
+      }
+
+      // Stop queue metrics collection
+      messageQueueService.stopMetricsCollection();
+
+      // Cleanup old queue messages
+      await messageQueueService.cleanup();
+
+      console.log('✅ WhatsApp client shutdown complete');
+    } catch (error) {
+      console.error('❌ Error during shutdown:', error);
       throw error;
     }
   }
@@ -181,6 +213,29 @@ export class WhatsAppClient {
 
         // Initialize MessageBuffer
         this.messageBuffer = new MessageBuffer((jid, messages) => this.processMessageBatch(jid, messages));
+
+        // Restore queue from database
+        await messageQueueService.restoreQueue();
+
+        // Initialize Worker Pool
+        this.workerPool = new WorkerPool(
+          messageQueueService,
+          this.processMessageBatch.bind(this)
+        );
+
+        // Initialize Concurrency Controller
+        this.concurrencyController = new ConcurrencyController(
+          messageQueueService,
+          this.workerPool
+        );
+
+        // Start worker pool and concurrency controller
+        this.workerPool.start().catch(err => {
+          console.error('❌ Worker pool error:', err);
+        });
+        this.concurrencyController.start();
+
+        console.log('🎯 Advanced queue system initialized');
 
         // Initialize Notification Service
         if (this.sock) {
