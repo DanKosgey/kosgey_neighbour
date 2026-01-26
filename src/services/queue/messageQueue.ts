@@ -10,7 +10,7 @@
 
 import { db, withRetry } from '../../database';
 import { messageQueue, queueMetrics } from '../../database/schema';
-import { eq, and, asc, desc, sql } from 'drizzle-orm';
+import { eq, and, asc, desc, sql, lt, gt } from 'drizzle-orm';
 
 export enum Priority {
     CRITICAL = 0,  // Owner messages
@@ -251,16 +251,18 @@ export class MessageQueue {
         });
 
         // Get total processed today
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const processedResult = await withRetry(async () => {
             return await db.select({ count: sql<number>`count(*)` })
                 .from(messageQueue)
                 .where(and(
                     eq(messageQueue.status, 'completed'),
-                    sql`${messageQueue.processedAt} > NOW() - INTERVAL '24 hours'`
+                    gt(messageQueue.processedAt, twentyFourHoursAgo)
                 ));
         });
 
         // Get average processing time
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
         const avgTimeResult = await withRetry(async () => {
             return await db.select({
                 avgMs: sql<number>`AVG(EXTRACT(EPOCH FROM (processed_at - created_at)) * 1000)`
@@ -268,7 +270,7 @@ export class MessageQueue {
                 .from(messageQueue)
                 .where(and(
                     eq(messageQueue.status, 'completed'),
-                    sql`${messageQueue.processedAt} > NOW() - INTERVAL '1 hour'`
+                    gt(messageQueue.processedAt, oneHourAgo)
                 ));
         });
 
@@ -278,7 +280,7 @@ export class MessageQueue {
                 .from(messageQueue)
                 .where(and(
                     eq(messageQueue.status, 'failed'),
-                    sql`${messageQueue.createdAt} > NOW() - INTERVAL '24 hours'`
+                    gt(messageQueue.createdAt, twentyFourHoursAgo)
                 ));
         });
 
@@ -298,11 +300,13 @@ export class MessageQueue {
     async cleanup(): Promise<number> {
         if (!this.persistenceEnabled) return 0;
 
+        const cutoffDate = new Date(Date.now() - this.STALE_MESSAGE_HOURS * 60 * 60 * 1000);
+
         const result = await withRetry(async () => {
             return await db.delete(messageQueue)
                 .where(and(
                     sql`${messageQueue.status} IN ('completed', 'failed')`,
-                    sql`${messageQueue.createdAt} < NOW() - INTERVAL '${this.STALE_MESSAGE_HOURS} hours'`
+                    lt(messageQueue.createdAt, cutoffDate)
                 ))
                 .returning();
         });
@@ -321,6 +325,8 @@ export class MessageQueue {
     async restoreStuckMessages(timeoutMinutes: number = 5): Promise<number> {
         if (!this.persistenceEnabled) return 0;
 
+        const cutoffDate = new Date(Date.now() - timeoutMinutes * 60 * 1000);
+
         const result = await withRetry(async () => {
             return await db.update(messageQueue)
                 .set({
@@ -329,7 +335,7 @@ export class MessageQueue {
                 })
                 .where(and(
                     eq(messageQueue.status, 'processing'),
-                    sql`${messageQueue.createdAt} < NOW() - INTERVAL '${timeoutMinutes} minutes'`
+                    lt(messageQueue.createdAt, cutoffDate)
                 ))
                 .returning();
         });
