@@ -43,7 +43,7 @@ export class WorkerPool {
     ) {
         this.config = {
             maxWorkers: parseInt(process.env.QUEUE_MAX_WORKERS || '5'),
-            workerTimeoutMs: parseInt(process.env.WORKER_TIMEOUT_MS || '30000'),
+            workerTimeoutMs: parseInt(process.env.WORKER_TIMEOUT_MS || '120000'), // 2 minutes
             healthCheckIntervalMs: 10000, // 10 seconds
             ...config
         };
