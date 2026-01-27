@@ -17,32 +17,11 @@ export class MessageBuffer {
     private buffers: Map<string, BufferedMessage[]> = new Map();
     private timers: Map<string, NodeJS.Timeout> = new Map();
 
-    // Adaptive Config: Base 60 seconds to allow users to complete their thoughts
-    // Increases when multiple people message at once
-    private readonly BASE_DEBOUNCE_MS = 60000; // 60 seconds base (1 minute)
-    private readonly MAX_DEBOUNCE_MS = 120000; // 120 seconds max (2 minutes)
-    private readonly QUICK_DEBOUNCE_MS = 5000; // 5 seconds for owner messages
+    // Strict 60s window for standard users
+    private readonly BATCH_WINDOW_MS = 60000; // 60 seconds
+    private readonly OWNER_WINDOW_MS = 5000; // 5 seconds for owner
 
     constructor(private processBatchCallback: (jid: string, messages: string[]) => Promise<void>) { }
-
-    /**
-     * Calculate adaptive debounce time based on active conversations
-     * Minimum 60 seconds to allow users to complete their thoughts
-     */
-    private getAdaptiveDebounce(jid: string): number {
-        // Owner gets quick response
-        if (ownerService.isOwner(jid)) {
-            return this.QUICK_DEBOUNCE_MS;
-        }
-
-        const activeConversations = this.buffers.size;
-
-        // Allow time for users to complete their thoughts
-        if (activeConversations === 1) return this.BASE_DEBOUNCE_MS; // 60s
-        if (activeConversations <= 3) return 75000; // 75s for 2-3 people
-        if (activeConversations <= 10) return 90000; // 90s for 4-10 people
-        return this.MAX_DEBOUNCE_MS; // 120s for 10+ people
-    }
 
     /**
      * Generate message fingerprint for deduplication
@@ -56,24 +35,6 @@ export class MessageBuffer {
             hash = hash & hash; // Convert to 32-bit integer
         }
         return hash.toString(36);
-    }
-
-    /**
-     * Check if messages are related (similar content or continuation)
-     */
-    private areMessagesRelated(msg1: string, msg2: string): boolean {
-        // Simple heuristic: messages are related if they share significant words
-        const words1 = new Set(msg1.toLowerCase().split(/\s+/).filter(w => w.length > 3));
-        const words2 = new Set(msg2.toLowerCase().split(/\s+/).filter(w => w.length > 3));
-
-        if (words1.size === 0 || words2.size === 0) return false;
-
-        // Calculate Jaccard similarity
-        const intersection = new Set([...words1].filter(w => words2.has(w)));
-        const union = new Set([...words1, ...words2]);
-
-        const similarity = intersection.size / union.size;
-        return similarity > 0.3; // 30% similarity threshold
     }
 
     /**
@@ -96,39 +57,9 @@ export class MessageBuffer {
     }
 
     /**
-     * Create smart batches from messages
-     * Groups related messages together, splits unrelated ones
-     */
-    private createSmartBatches(messages: string[]): string[][] {
-        if (messages.length <= 1) return [messages];
-
-        const batches: string[][] = [];
-        let currentBatch: string[] = [messages[0]];
-
-        for (let i = 1; i < messages.length; i++) {
-            const prevMsg = messages[i - 1];
-            const currMsg = messages[i];
-
-            if (this.areMessagesRelated(prevMsg, currMsg)) {
-                // Related - add to current batch
-                currentBatch.push(currMsg);
-            } else {
-                // Not related - start new batch
-                batches.push(currentBatch);
-                currentBatch = [currMsg];
-            }
-        }
-
-        // Add final batch
-        if (currentBatch.length > 0) {
-            batches.push(currentBatch);
-        }
-
-        return batches;
-    }
-
-    /**
      * Add a message to the user's buffer
+     * Implements a sliding window: every new message resets the timer.
+     * Processing only happens after silence for the window duration.
      */
     add(jid: string, text: string) {
         // 1. Initialize buffer if missing
@@ -147,23 +78,22 @@ export class MessageBuffer {
         const userBuffer = this.buffers.get(jid)!;
         userBuffer.push(bufferedMsg);
 
-        // 4. Reset the timer
+        // 4. Reset the timer (Sliding Window)
         if (this.timers.has(jid)) {
             clearTimeout(this.timers.get(jid));
         }
 
-        // 5. Calculate adaptive debounce
-        const debounceTime = this.getAdaptiveDebounce(jid);
+        // 5. Determine window size
+        const windowSize = ownerService.isOwner(jid) ? this.OWNER_WINDOW_MS : this.BATCH_WINDOW_MS;
 
         // 6. Start new timer
         const timer = setTimeout(() => {
             this.flush(jid);
-        }, debounceTime);
+        }, windowSize);
 
         this.timers.set(jid, timer);
 
-        const activeCount = this.buffers.size;
-        console.log(`⏳ Buffering message from ${jid} (Count: ${userBuffer.length}). Waiting ${debounceTime / 1000}s... [${activeCount} active conversations]`);
+        console.log(`⏳ Buffering message from ${jid} (Count: ${userBuffer.length}). Reset timer to ${windowSize / 1000}s...`);
     }
 
     /**
