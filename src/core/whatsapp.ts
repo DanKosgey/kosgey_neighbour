@@ -375,10 +375,11 @@ export class WhatsAppClient {
     // 2. Add to Buffer (Debounce)
     if (this.messageBuffer) {
       this.messageBuffer.add(remoteJid, text);
-      // Manage Conversation Session
-      if (this.conversationManager) {
-        this.conversationManager.touchConversation(remoteJid);
-      }
+      // EMERGENCY FIX: Disabled ConversationManager to stop duplicate snitch reports
+      // TODO: Re-enable after fixing rate limit loop
+      // if (this.conversationManager) {
+      //   this.conversationManager.touchConversation(remoteJid);
+      // }
     }
   }
 
