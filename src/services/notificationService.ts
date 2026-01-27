@@ -5,6 +5,7 @@
 
 import { WASocket } from '@whiskeysockets/baileys';
 import { ownerService } from './ownerService';
+import { formatPhoneNumber } from '../utils/phoneFormatter';
 
 export class NotificationService {
     private sock: WASocket | undefined;
@@ -51,7 +52,7 @@ export class NotificationService {
     async sendSnitchReport(contactJid: string, contactName: string, message: string): Promise<void> {
         const report = `📝 Smart Snitch Report\n\n` +
             `👤 Contact: ${contactName}\n` +
-            `📞 Number: ${contactJid.split('@')[0]}\n` +
+            `📞 Number: ${formatPhoneNumber(contactJid)}\n` +
             `💬 Message: "${message}"\n\n` +
             `Reply to this message to respond to them.`;
 
@@ -75,7 +76,7 @@ export class NotificationService {
     async sendNewContactAlert(contactName: string, contactJid: string): Promise<void> {
         const alert = `✨ New Contact\n\n` +
             `Name: ${contactName}\n` +
-            `Number: ${contactJid.split('@')[0]}`;
+            `Number: ${formatPhoneNumber(contactJid)}`;
 
         await this.notifyOwner(alert);
     }
