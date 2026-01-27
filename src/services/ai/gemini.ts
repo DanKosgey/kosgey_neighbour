@@ -1,247 +1,480 @@
-import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerativeModel, FunctionCall } from '@google/generative-ai';
 import { config } from '../../config/env';
 import { SYSTEM_PROMPTS } from './prompts';
 import { AI_TOOLS } from './tools';
 import { keyManager } from '../keyManager';
 
-// Global request queue to prevent simultaneous API calls
-let requestQueue: Promise<any> = Promise.resolve();
-const MIN_REQUEST_SPACING_MS = 3000; // 3 seconds between requests (Gemini free tier: 2 RPM = 30s/request)
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
+
+interface AIProfile {
+  agentName?: string;
+  agentRole?: string;
+  personalityTraits?: string;
+  communicationStyle?: string;
+  formalityLevel?: number;
+  systemPrompt?: string;
+  greetingMessage?: string;
+  responseLength?: 'short' | 'long';
+}
+
+interface UserProfile {
+  fullName?: string;
+  preferredName?: string;
+  title?: string;
+  company?: string;
+  priorities?: string;
+  availability?: string;
+  backgroundInfo?: string;
+  communicationPreferences?: string;
+}
+
+interface GeminiResponse {
+  type: 'text' | 'tool_call';
+  content?: string;
+  functionCall?: {
+    name: string;
+    args: any;
+  };
+}
+
+interface AnalysisResult {
+  urgency: number;
+  status: string;
+  summary_for_owner: string;
+}
+
+interface ProfileUpdate {
+  [key: string]: any;
+}
+
+// ============================================================================
+// CONFIGURATION CONSTANTS
+// ============================================================================
+
+const RATE_LIMIT_CONFIG = {
+  MIN_REQUEST_SPACING_MS: 3000,      // 3 seconds between requests (Gemini free tier: 2 RPM)
+  MAX_RETRIES: 50,                   // Maximum retry attempts
+  RETRY_DELAY_MS: 2000,              // Delay before trying next key after rate limit
+  DEFAULT_RETRY_SECONDS: 60,         // Default wait time if retry-after not specified
+} as const;
+
+const ERROR_CODES = {
+  ALL_KEYS_EXHAUSTED: 'ALL_KEYS_EXHAUSTED',
+  RATE_LIMIT: 429,
+  INVALID_KEY: 400,
+} as const;
+
+const ERROR_MESSAGES = {
+  CONNECTION_ERROR: "I'm having a bit of trouble connecting right now. One moment.",
+  ANALYSIS_DEFAULT: 'Error analyzing',
+  REPORT_ERROR_PREFIX: '⚠️ Error generating report for',
+} as const;
+
+// ============================================================================
+// GEMINI SERVICE CLASS
+// ============================================================================
 
 export class GeminiService {
+  private requestQueue: Promise<any> = Promise.resolve();
 
   constructor() { }
 
+  // --------------------------------------------------------------------------
+  // CORE REQUEST HANDLING WITH RETRY & QUEUEING
+  // --------------------------------------------------------------------------
+
   /**
-   * Helper to execute Gemini operations with Key Rotation & Retries
-   * Now includes global queueing to prevent simultaneous requests
+   * Executes Gemini operations with key rotation, retries, and request queueing.
+   * Ensures sequential execution and enforces rate limit spacing.
    */
-  private async executeWithRetry<T>(operation: (model: GenerativeModel) => Promise<T>): Promise<T> {
-    // Queue this request to ensure sequential execution
+  private async executeWithRetry<T>(
+    operation: (model: GenerativeModel) => Promise<T>
+  ): Promise<T> {
     return new Promise((resolve, reject) => {
-      requestQueue = requestQueue.then(async () => {
-        const startTime = Date.now();
+      this.requestQueue = this.requestQueue
+        .then(async () => {
+          const startTime = Date.now();
 
-        try {
-          const result = await this._executeWithRetryInternal(operation);
-
-          // Ensure minimum spacing between requests
-          const elapsed = Date.now() - startTime;
-          if (elapsed < MIN_REQUEST_SPACING_MS) {
-            await new Promise(r => setTimeout(r, MIN_REQUEST_SPACING_MS - elapsed));
+          try {
+            const result = await this._retryWithKeyRotation(operation);
+            await this._enforceRateLimit(startTime);
+            resolve(result);
+          } catch (error) {
+            reject(error);
           }
-
-          resolve(result);
-        } catch (error) {
-          reject(error);
-        }
-      }).catch(reject);
+        })
+        .catch(reject);
     });
   }
 
-  private async _executeWithRetryInternal<T>(operation: (model: GenerativeModel) => Promise<T>): Promise<T> {
-    let lasterror: any;
+  /**
+   * Internal retry logic with automatic key rotation on failures
+   */
+  private async _retryWithKeyRotation<T>(
+    operation: (model: GenerativeModel) => Promise<T>
+  ): Promise<T> {
+    let lastError: any;
 
-    // Try up to the number of available keys + some buffer, or until exhausted
-    // We loop "indefinitely" because getNextKey() handles the exhaustion logic
-    for (let i = 0; i < 50; i++) {
-      let key: string;
+    for (let attempt = 0; attempt < RATE_LIMIT_CONFIG.MAX_RETRIES; attempt++) {
       try {
-        key = keyManager.getNextKey();
-      } catch (e: any) {
-        if (e.message === 'ALL_KEYS_EXHAUSTED') {
-          // Propagate this specific error so the Queue Manager knows to wait
-          throw e;
-        }
-        throw e;
-      }
-
-      try {
-        const genAI = new GoogleGenerativeAI(key);
-        const model = genAI.getGenerativeModel({ model: config.geminiModel }); // Using reliable model
+        const key = this._getNextKey();
+        const model = this._createModel(key);
         return await operation(model);
-
       } catch (error: any) {
-        lasterror = error;
-        // Check for 429 (Rate Limit)
-        if (error.status === 429 || error.code === 429 || error.message?.includes('429')) {
-          const retryDelay = error.errorDetails?.find((d: any) => d['@type']?.includes('RetryInfo'))?.retryDelay;
-          const seconds = retryDelay ? parseInt(retryDelay) : 60;
+        lastError = error;
 
-          console.warn(`⚠️ Key ending in ...${key.slice(-4)} hit Rate Limit (429). Switching keys...`);
-          keyManager.markRateLimited(key, seconds);
-
-          // Add delay before trying next key to avoid exhausting all keys rapidly
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          continue;
+        const shouldRetry = await this._handleOperationError(error);
+        if (!shouldRetry) {
+          throw error;
         }
-
-        // Check for 400 (Invalid/Expired Key)
-        if (error.status === 400 || error.message?.includes('API_KEY_INVALID') || error.message?.includes('API key expired')) {
-          console.warn(`❌ Key ending in ...${key.slice(-4)} is INVALID/EXPIRED. Skipping...`);
-          // Ideally we remove it from the pool, but for now just skipping this turn is enough to save the request
-          continue;
-        }
-
-        // If it's another error, throw immediately
-        throw error;
       }
     }
-    throw lasterror;
+
+    throw lastError;
   }
 
+  /**
+   * Handles operation errors and determines retry strategy
+   */
+  private async _handleOperationError(error: any): Promise<boolean> {
+    // All keys exhausted - propagate immediately
+    if (error.message === ERROR_CODES.ALL_KEYS_EXHAUSTED) {
+      return false;
+    }
+
+    const currentKey = keyManager.getCurrentKey?.() || 'unknown';
+
+    // Rate limit error - mark key and try another
+    if (this._isRateLimitError(error)) {
+      const retrySeconds = this._extractRetryDelay(error);
+      console.warn(
+        `⚠️ Key ending in ...${currentKey.slice(-4)} hit Rate Limit (429). ` +
+        `Retry after ${retrySeconds}s. Switching keys...`
+      );
+      keyManager.markRateLimited(currentKey, retrySeconds);
+      await this._delay(RATE_LIMIT_CONFIG.RETRY_DELAY_MS);
+      return true;
+    }
+
+    // Invalid or expired key - skip this key
+    if (this._isInvalidKeyError(error)) {
+      console.warn(`❌ Key ending in ...${currentKey.slice(-4)} is INVALID/EXPIRED. Skipping...`);
+      return true;
+    }
+
+    // Other errors should not retry
+    return false;
+  }
+
+  /**
+   * Retrieves next available API key from key manager
+   */
+  private _getNextKey(): string {
+    try {
+      return keyManager.getNextKey();
+    } catch (error: any) {
+      if (error.message === ERROR_CODES.ALL_KEYS_EXHAUSTED) {
+        throw error;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Creates a Gemini model instance with the provided API key
+   */
+  private _createModel(apiKey: string): GenerativeModel {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    return genAI.getGenerativeModel({ model: config.geminiModel });
+  }
+
+  /**
+   * Enforces minimum spacing between API requests for rate limiting
+   */
+  private async _enforceRateLimit(startTime: number): Promise<void> {
+    const elapsed = Date.now() - startTime;
+    const remainingWait = RATE_LIMIT_CONFIG.MIN_REQUEST_SPACING_MS - elapsed;
+
+    if (remainingWait > 0) {
+      await this._delay(remainingWait);
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // ERROR DETECTION HELPERS
+  // --------------------------------------------------------------------------
+
+  private _isRateLimitError(error: any): boolean {
+    return (
+      error.status === ERROR_CODES.RATE_LIMIT ||
+      error.code === ERROR_CODES.RATE_LIMIT ||
+      error.message?.includes('429')
+    );
+  }
+
+  private _isInvalidKeyError(error: any): boolean {
+    return (
+      error.status === ERROR_CODES.INVALID_KEY ||
+      error.message?.includes('API_KEY_INVALID') ||
+      error.message?.includes('API key expired')
+    );
+  }
+
+  private _extractRetryDelay(error: any): number {
+    const retryInfo = error.errorDetails?.find(
+      (detail: any) => detail['@type']?.includes('RetryInfo')
+    );
+
+    if (retryInfo?.retryDelay) {
+      const seconds = parseInt(retryInfo.retryDelay, 10);
+      return isNaN(seconds) ? RATE_LIMIT_CONFIG.DEFAULT_RETRY_SECONDS : seconds;
+    }
+
+    return RATE_LIMIT_CONFIG.DEFAULT_RETRY_SECONDS;
+  }
+
+  // --------------------------------------------------------------------------
+  // SYSTEM PROMPT CONSTRUCTION
+  // --------------------------------------------------------------------------
+
+  /**
+   * Builds the complete system prompt from various sources with priority hierarchy
+   */
+  private _buildSystemPrompt(
+    userContext: string,
+    aiProfile?: AIProfile,
+    userProfile?: UserProfile,
+    customPrompt?: string
+  ): string {
+    let systemPrompt: string;
+
+    // Priority 1: Custom prompt override
+    if (customPrompt) {
+      systemPrompt = customPrompt;
+    }
+    // Priority 2: AI profile hardcoded system prompt
+    else if (aiProfile?.systemPrompt) {
+      systemPrompt = aiProfile.systemPrompt;
+    }
+    // Priority 3: Construct from AI profile components
+    else if (aiProfile) {
+      systemPrompt = this._constructProfilePrompt(aiProfile, userContext);
+    }
+    // Priority 4: Default fallback
+    else {
+      systemPrompt = SYSTEM_PROMPTS.REPRESENTATIVE(userContext);
+    }
+
+    // Append user/boss profile information
+    if (userProfile) {
+      systemPrompt = this._appendUserProfile(systemPrompt, userProfile);
+    }
+
+    // Apply response length constraint
+    if (aiProfile?.responseLength === 'short') {
+      systemPrompt = this._appendShortResponseConstraint(systemPrompt);
+    }
+
+    return systemPrompt;
+  }
+
+  /**
+   * Constructs system prompt from AI profile components
+   */
+  private _constructProfilePrompt(aiProfile: AIProfile, userContext: string): string {
+    const sections = [
+      this._buildIdentitySection(aiProfile),
+      this._buildInstructionsSection(aiProfile),
+      this._buildContextSection(userContext),
+      this._buildGreetingSection(aiProfile),
+    ];
+
+    return sections.filter(Boolean).join('\n\n');
+  }
+
+  private _buildIdentitySection(aiProfile: AIProfile): string {
+    return `IDENTITY & ROLE:
+You are ${aiProfile.agentName || 'the Representative'}, ${aiProfile.agentRole || 'a personal assistant'}.
+Personality: ${aiProfile.personalityTraits || 'Professional and helpful'}.
+Style: ${aiProfile.communicationStyle || 'Friendly'}.
+Formality Level: ${aiProfile.formalityLevel || 5}/10.`;
+  }
+
+  private _buildInstructionsSection(aiProfile: AIProfile): string {
+    const instructions = this._getCoreInstructions(aiProfile);
+    return `CORE INSTRUCTIONS:
+${instructions}`;
+  }
+
+  private _getCoreInstructions(aiProfile: AIProfile): string {
+    if (aiProfile.agentRole === 'Discipline Guardian') {
+      return "You are a strict but supportive mentor. Your goal is to help the user conserve energy and maintain discipline. Do not be a sycophant. Call them out on weakness, but encourage their strength.";
+    }
+    return "You manage communications autonomously. Be helpful but protective of the owner's time.";
+  }
+
+  private _buildContextSection(userContext: string): string {
+    return `CONTEXT ABOUT THIS CONTACT:
+${userContext}`;
+  }
+
+  private _buildGreetingSection(aiProfile: AIProfile): string | null {
+    if (aiProfile.greetingMessage) {
+      return `Preferred Greeting: "${aiProfile.greetingMessage}"`;
+    }
+    return null;
+  }
+
+  /**
+   * Appends user/boss profile context to system prompt
+   */
+  private _appendUserProfile(prompt: string, userProfile: UserProfile): string {
+    const bossInfo = `
+**Information about the Boss (Your User):**
+Name: ${userProfile.fullName || userProfile.preferredName || 'The Boss'}
+Title/Role: ${userProfile.title || 'Owner'} at ${userProfile.company || 'N/A'}
+Priorities: ${userProfile.priorities || 'Not specified'}
+Availability: ${userProfile.availability || 'Not specified'}
+Background: ${userProfile.backgroundInfo || 'N/A'}
+Communication Prefs: ${userProfile.communicationPreferences || 'N/A'}`;
+
+    return `${prompt}\n${bossInfo}`;
+  }
+
+  /**
+   * Adds constraint for short, concise responses
+   */
+  private _appendShortResponseConstraint(prompt: string): string {
+    return `${prompt}
+
+CRITICAL INSTRUCTION: Your response MUST be short, concise, and direct. Use short sentences. Avoid flowery language or unnecessary pleasantries. Maximum 2-3 sentences unless explaining a complex topic.`;
+  }
+
+  /**
+   * Builds the final conversation prompt with history
+   */
+  private _buildConversationPrompt(systemPrompt: string, history: string[]): string {
+    return `${systemPrompt}
+
+**CONVERSATION HISTORY:**
+${history.join('\n')}
+
+**YOUR REPLY:**`;
+  }
+
+  // --------------------------------------------------------------------------
+  // PUBLIC API METHODS
+  // --------------------------------------------------------------------------
+
+  /**
+   * Generates AI reply to conversation with tool calling support
+   */
   async generateReply(
     history: string[],
     userContext: string,
-    aiProfile?: any,
-    userProfile?: any,
+    aiProfile?: AIProfile,
+    userProfile?: UserProfile,
     customPrompt?: string
-  ): Promise<{ type: 'text' | 'tool_call', content?: string, functionCall?: { name: string, args: any } }> {
+  ): Promise<GeminiResponse> {
     try {
-      let systemPrompt = customPrompt;
+      const systemPrompt = this._buildSystemPrompt(
+        userContext,
+        aiProfile,
+        userProfile,
+        customPrompt
+      );
 
-      // 1. Construct System Prompt from AI Profile if not provided specifically (e.g. Identity prompt)
-      if (!systemPrompt) {
-        if (aiProfile) {
-          if (aiProfile.systemPrompt) {
-            // A. Use hardcoded override from DB
-            systemPrompt = aiProfile.systemPrompt;
-          } else {
-            // B. Construct from components
-            systemPrompt = `
-IDENTITY & ROLE:
-You are ${aiProfile.agentName || "the Representative"}, ${aiProfile.agentRole || "a personal assistant"}.
-Personality: ${aiProfile.personalityTraits || "Professional and helpful"}.
-Style: ${aiProfile.communicationStyle || "Friendly"}.
-Formality Level: ${aiProfile.formalityLevel || 5}/10.
-
-CORE INSTRUCTIONS:
-${aiProfile.agentRole === 'Discipline Guardian' ?
-                // Special handling for the Discipline Guardian to ensure it's strict
-                "You are a strict but supportive mentor. Your goal is to help the user conserve energy and maintain discipline. Do not be a sycophant. Call them out on weakness, but encourage their strength." :
-                "You manage communications autonomously. Be helpful but protective of the owner's time."
-              }
-
-CONTEXT ABOUT THIS CONTACT:
-${userContext}
-`;
-            if (aiProfile.greetingMessage) {
-              systemPrompt += `\nPreferred Greeting: "${aiProfile.greetingMessage}"`;
-            }
-          }
-        } else {
-          // C. Default Fallback
-          systemPrompt = SYSTEM_PROMPTS.REPRESENTATIVE(userContext);
-        }
-      }
-
-      // 2. Inject Owner/Boss Profile (The "Knowledge Base" about the Boss)
-      if (userProfile) {
-        const bossContext = `
-**Information about the Boss (Your User):**
-Name: ${userProfile.fullName || userProfile.preferredName || "The Boss"}
-Title/Role: ${userProfile.title || "Owner"} at ${userProfile.company || "N/A"}
-Priorities: ${userProfile.priorities || "Not specified"}
-Availability: ${userProfile.availability || "Not specified"}
-Background: ${userProfile.backgroundInfo || "N/A"}
-Communication Prefs: ${userProfile.communicationPreferences || "N/A"}
-`;
-        systemPrompt += `\n${bossContext}`;
-      }
-
-      const prompt = `${systemPrompt}
-      
-      **CONVERSATION HISTORY:**
-      ${history.join('\n')}
-      
-      **YOUR REPLY:**`;
+      const fullPrompt = this._buildConversationPrompt(systemPrompt, history);
 
       return await this.executeWithRetry(async (model) => {
         const result = await model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          tools: AI_TOOLS as any
+          contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+          tools: AI_TOOLS as any,
         });
 
         const response = result.response;
         const functionCalls = response.functionCalls();
 
+        // Handle tool/function calls
         if (functionCalls && functionCalls.length > 0) {
-          const call = functionCalls[0];
-          console.log('🤖 Gemini wants to call tool:', call.name);
-          return {
-            type: 'tool_call',
-            functionCall: {
-              name: call.name,
-              args: call.args
-            }
-          };
+          return this._createToolCallResponse(functionCalls[0]);
         }
 
-        return { type: 'text', content: response.text().trim() };
+        // Handle text response
+        return this._createTextResponse(response.text());
       });
     } catch (error: any) {
-      if (error.message === 'ALL_KEYS_EXHAUSTED') throw error; // Handle in caller
-      console.error('Gemini Generate Error:', error);
-      return { type: 'text', content: "I'm having a bit of trouble connecting right now. One moment." };
+      return this._handleGenerateReplyError(error);
     }
   }
 
-  async updateProfile(history: string[], currentSummary: string): Promise<any> {
+  /**
+   * Updates user profile based on conversation history
+   */
+  async updateProfile(
+    history: string[],
+    currentSummary: string
+  ): Promise<ProfileUpdate | null> {
     try {
       const prompt = `${SYSTEM_PROMPTS.PROFILER}
-      
-      **CURRENT SUMMARY:**
-      ${currentSummary || "None"}
 
-      **RECENT HISTORY:**
-      ${history.join('\n')}
-      
-      **OUTPUT JSON:**`;
+**CURRENT SUMMARY:**
+${currentSummary || 'None'}
+
+**RECENT HISTORY:**
+${history.join('\n')}
+
+**OUTPUT JSON:**`;
 
       return await this.executeWithRetry(async (model) => {
         const result = await model.generateContent(prompt);
         const text = result.response.text();
-        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return JSON.parse(jsonStr);
+        return this._parseJsonResponse(text);
       });
     } catch (error) {
-      // Silent fail for profiling
-      // console.error('Gemini Profiling Error:', error); 
+      // Silent fail for profiling - non-critical operation
       return null;
     }
   }
 
-  async analyzeConversation(history: string[]): Promise<any> {
+  /**
+   * Analyzes conversation for urgency, status, and generates summary
+   */
+  async analyzeConversation(history: string[]): Promise<AnalysisResult> {
     try {
       const prompt = `${SYSTEM_PROMPTS.ANALYSIS}
-      
-      **HISTORY:**
-      ${history.join('\n')}
-      
-      **OUTPUT JSON:**`;
+
+**HISTORY:**
+${history.join('\n')}
+
+**OUTPUT JSON:**`;
 
       return await this.executeWithRetry(async (model) => {
         const result = await model.generateContent(prompt);
         const text = result.response.text();
-        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return JSON.parse(jsonStr);
+        return this._parseJsonResponse(text);
       });
     } catch (error) {
       console.error('Gemini Analysis Error:', error);
-      return { urgency: 5, status: 'active', summary_for_owner: 'Error analyzing' };
+      return this._getDefaultAnalysisResult();
     }
   }
 
+  /**
+   * Generates formatted conversation report
+   */
   async generateReport(history: string[], contactName: string): Promise<string> {
     try {
       const prompt = `${SYSTEM_PROMPTS.REPORT_GENERATOR}
-      
-      **CONTACT NAME:** ${contactName}
 
-      **CONVERSATION HISTORY:**
-      ${history.join('\n')}
-      
-      **YOUR REPORT:**`;
+**CONTACT NAME:** ${contactName}
+
+**CONVERSATION HISTORY:**
+${history.join('\n')}
+
+**YOUR REPORT:**`;
 
       return await this.executeWithRetry(async (model) => {
         const result = await model.generateContent(prompt);
@@ -249,9 +482,85 @@ Communication Prefs: ${userProfile.communicationPreferences || "N/A"}
       });
     } catch (error) {
       console.error('Gemini Report Error:', error);
-      return `⚠️ Error generating report for ${contactName}. Check logs.`;
+      return this._getDefaultReportError(contactName);
     }
   }
+
+  // --------------------------------------------------------------------------
+  // RESPONSE BUILDERS
+  // --------------------------------------------------------------------------
+
+  private _createToolCallResponse(functionCall: FunctionCall): GeminiResponse {
+    console.log('🤖 Gemini wants to call tool:', functionCall.name);
+    return {
+      type: 'tool_call',
+      functionCall: {
+        name: functionCall.name,
+        args: functionCall.args,
+      },
+    };
+  }
+
+  private _createTextResponse(text: string): GeminiResponse {
+    return {
+      type: 'text',
+      content: text.trim(),
+    };
+  }
+
+  // --------------------------------------------------------------------------
+  // ERROR HANDLERS
+  // --------------------------------------------------------------------------
+
+  private _handleGenerateReplyError(error: any): GeminiResponse {
+    if (error.message === ERROR_CODES.ALL_KEYS_EXHAUSTED) {
+      throw error; // Let caller handle key exhaustion
+    }
+
+    console.error('Gemini Generate Error:', error);
+    return {
+      type: 'text',
+      content: ERROR_MESSAGES.CONNECTION_ERROR,
+    };
+  }
+
+  private _getDefaultAnalysisResult(): AnalysisResult {
+    return {
+      urgency: 5,
+      status: 'active',
+      summary_for_owner: ERROR_MESSAGES.ANALYSIS_DEFAULT,
+    };
+  }
+
+  private _getDefaultReportError(contactName: string): string {
+    return `${ERROR_MESSAGES.REPORT_ERROR_PREFIX} ${contactName}. Check logs.`;
+  }
+
+  // --------------------------------------------------------------------------
+  // UTILITY METHODS
+  // --------------------------------------------------------------------------
+
+  /**
+   * Parses JSON response from Gemini, removing markdown code blocks
+   */
+  private _parseJsonResponse<T = any>(text: string): T {
+    const cleanJson = text
+      .replace(/```json/g, '')
+      .replace(/```/g, '')
+      .trim();
+    return JSON.parse(cleanJson);
+  }
+
+  /**
+   * Promise-based delay utility
+   */
+  private _delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
 }
+
+// ============================================================================
+// SINGLETON EXPORT
+// ============================================================================
 
 export const geminiService = new GeminiService();

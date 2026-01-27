@@ -32,6 +32,7 @@ export class WhatsAppClient {
   private maxReconnectAttempts: number = 5;
   private qrCode: string | null = null; // Store QR code
   private lastConnectTime: number = 0;
+  private isLoggingOut: boolean = false;
 
   constructor() { }
 
@@ -43,6 +44,7 @@ export class WhatsAppClient {
   }
 
   public async logout(): Promise<void> {
+    this.isLoggingOut = true;
     try {
       if (this.sock) {
         console.log('📤 Logging out from WhatsApp...');
@@ -92,6 +94,7 @@ export class WhatsAppClient {
 
 
   async initialize() {
+    this.isLoggingOut = false;
     console.log('🔌 Initializing Representative Agent...');
 
     // 1. Try to acquire session lock
@@ -169,7 +172,8 @@ export class WhatsAppClient {
         }
 
         // Handle 401 (logged out)
-        if (error === 401 || error === DisconnectReason.loggedOut) {
+        // Skip if intentional logout (prevent process exit loop)
+        if ((error === 401 || error === DisconnectReason.loggedOut) && !this.isLoggingOut) {
           console.log('❌ Session logged out or invalid (401).');
           console.log('💡 Clearing auth credentials to allow re-scan...');
           // Import authCredentials in the file header first, but assuming it is available or I will fix the import
@@ -320,9 +324,9 @@ export class WhatsAppClient {
       return;
     }
 
-    // Only process personal messages (ending with @s.whatsapp.net)
+    // Only process personal messages (ending with @s.whatsapp.net or @lid)
     // NOTE: This includes WhatsApp Business accounts as they use the same suffix
-    if (!remoteJid.endsWith('@s.whatsapp.net')) {
+    if (!remoteJid.endsWith('@s.whatsapp.net') && !remoteJid.endsWith('@lid')) {
       console.log(`⏩ Skipping: Unknown JID format ${remoteJid}`);
       return;
     }
@@ -470,6 +474,16 @@ export class WhatsAppClient {
       `⚠️ IMPORTANT: You are chatting with the OWNER (Boss). You have full access to all tools including summaries, system status, and analytics. Obey all commands.` :
       `Contact Name: ${contact.name || "Unknown"}\nSummary: ${contact.summary}\nTrust Level: ${contact.trustLevel}`;
 
+    // Helper to remove nulls
+    const sanitizeProfile = (profile: any) => {
+      if (!profile) return undefined;
+      const sanitized: any = {};
+      for (const [key, value] of Object.entries(profile)) {
+        if (value !== null) sanitized[key] = value;
+      }
+      return sanitized;
+    };
+
     // Fetch AI and User Profiles
     const currentAiProfile = await withRetry(async () => {
       return await db.select().from(aiProfile).limit(1).then(res => res[0]);
@@ -484,8 +498,8 @@ export class WhatsAppClient {
       geminiResponse = await geminiService.generateReply(
         history.concat(`Them: ${fullText}`),
         userRoleContext,
-        currentAiProfile,
-        currentUserProfile,
+        sanitizeProfile(currentAiProfile),
+        sanitizeProfile(currentUserProfile),
         systemPrompt
       );
     } catch (error: any) {
@@ -502,6 +516,8 @@ export class WhatsAppClient {
       if (isOwner && this.sock) await this.sock.sendMessage(remoteJid, { text: "⚠️ AI Error: " + (error.message || "Unknown error") });
       return;
     }
+
+
 
     // 6. Handle Tool Calls
     const MAX_TOOL_DEPTH = 2;
@@ -527,8 +543,8 @@ export class WhatsAppClient {
         geminiResponse = await geminiService.generateReply(
           history.concat(`Them: ${fullText}`, toolOutputText),
           userRoleContext,
-          currentAiProfile,
-          currentUserProfile,
+          sanitizeProfile(currentAiProfile),
+          sanitizeProfile(currentUserProfile),
           systemPrompt
         );
       } catch (error: any) {

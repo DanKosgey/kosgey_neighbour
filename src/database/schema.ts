@@ -85,7 +85,7 @@ export const aiProfile = pgTable('ai_profile', {
     greetingMessage: text('greeting_message'), // Custom greeting for new contacts
 
     // Behavior Settings
-    responseLength: varchar('response_length', { length: 20 }).default('medium'), // short, medium, long
+    responseLength: varchar('response_length', { length: 20 }).default('short'), // short, medium, long
     useEmojis: boolean('use_emojis').default(true),
     formalityLevel: integer('formality_level').default(5), // 1-10 scale
 

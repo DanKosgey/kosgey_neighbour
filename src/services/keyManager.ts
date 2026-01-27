@@ -100,6 +100,16 @@ export class KeyManager {
     isPoolExhausted(): boolean {
         return this.getAvailableCount() === 0;
     }
+    /**
+     * Get the currently active key (or last used)
+     */
+    getCurrentKey(): string | undefined {
+        if (this.keys.length === 0) return undefined;
+        // currentIndex points to the NEXT key, so previous was (currentIndex - 1)
+        // Handle wrap-around
+        const prevIndex = (this.currentIndex - 1 + this.keys.length) % this.keys.length;
+        return this.keys[prevIndex]?.key;
+    }
 }
 
 export const keyManager = new KeyManager();
