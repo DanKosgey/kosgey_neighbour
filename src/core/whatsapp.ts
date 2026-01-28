@@ -576,7 +576,7 @@ export class WhatsAppClient {
 
 
     // 6. Handle Tool Calls
-    const MAX_TOOL_DEPTH = 2;
+    const MAX_TOOL_DEPTH = 5; // Increased from 2 to 5 to handle complex web searches
     let toolDepth = 0;
 
     while (geminiResponse.type === 'tool_call' && geminiResponse.functionCall && toolDepth < MAX_TOOL_DEPTH) {
@@ -624,6 +624,11 @@ export class WhatsAppClient {
     // 7. Send Final Response
     if (geminiResponse.type === 'text' && geminiResponse.content) {
       await this.sendResponseAndLog(remoteJid, geminiResponse.content, contact, history, fullText);
+    } else if (geminiResponse.type === 'tool_call') {
+      // Loop exited but AI still wants to call tools. Prevent silent failure.
+      console.warn(`⚠️ Max tool depth (${MAX_TOOL_DEPTH}) exceeded. Sending failover message.`);
+      const errorMsg = "I'm having trouble getting all the information. I might be getting stuck in a research loop. Could you ask a more specific question?";
+      await this.sendResponseAndLog(remoteJid, errorMsg, contact, history, fullText);
     }
   }
 
