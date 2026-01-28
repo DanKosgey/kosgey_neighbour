@@ -869,3 +869,171 @@ window.selectChat = async function (phone) {
     scrollToBottom(container);
 };
 
+// ===== TIMEZONE PICKER =====
+const timezoneData = [
+    // Americas
+    { city: 'New York', country: 'USA', timezone: 'America/New_York', offset: 'UTC-5' },
+    { city: 'Los Angeles', country: 'USA', timezone: 'America/Los_Angeles', offset: 'UTC-8' },
+    { city: 'Chicago', country: 'USA', timezone: 'America/Chicago', offset: 'UTC-6' },
+    { city: 'Denver', country: 'USA', timezone: 'America/Denver', offset: 'UTC-7' },
+    { city: 'Phoenix', country: 'USA', timezone: 'America/Phoenix', offset: 'UTC-7' },
+    { city: 'Toronto', country: 'Canada', timezone: 'America/Toronto', offset: 'UTC-5' },
+    { city: 'Vancouver', country: 'Canada', timezone: 'America/Vancouver', offset: 'UTC-8' },
+    { city: 'Mexico City', country: 'Mexico', timezone: 'America/Mexico_City', offset: 'UTC-6' },
+    { city: 'São Paulo', country: 'Brazil', timezone: 'America/Sao_Paulo', offset: 'UTC-3' },
+    { city: 'Buenos Aires', country: 'Argentina', timezone: 'America/Argentina/Buenos_Aires', offset: 'UTC-3' },
+    { city: 'Lima', country: 'Peru', timezone: 'America/Lima', offset: 'UTC-5' },
+    { city: 'Bogotá', country: 'Colombia', timezone: 'America/Bogota', offset: 'UTC-5' },
+    { city: 'Santiago', country: 'Chile', timezone: 'America/Santiago', offset: 'UTC-3' },
+
+    // Europe
+    { city: 'London', country: 'UK', timezone: 'Europe/London', offset: 'UTC+0' },
+    { city: 'Paris', country: 'France', timezone: 'Europe/Paris', offset: 'UTC+1' },
+    { city: 'Berlin', country: 'Germany', timezone: 'Europe/Berlin', offset: 'UTC+1' },
+    { city: 'Madrid', country: 'Spain', timezone: 'Europe/Madrid', offset: 'UTC+1' },
+    { city: 'Rome', country: 'Italy', timezone: 'Europe/Rome', offset: 'UTC+1' },
+    { city: 'Amsterdam', country: 'Netherlands', timezone: 'Europe/Amsterdam', offset: 'UTC+1' },
+    { city: 'Brussels', country: 'Belgium', timezone: 'Europe/Brussels', offset: 'UTC+1' },
+    { city: 'Vienna', country: 'Austria', timezone: 'Europe/Vienna', offset: 'UTC+1' },
+    { city: 'Zurich', country: 'Switzerland', timezone: 'Europe/Zurich', offset: 'UTC+1' },
+    { city: 'Stockholm', country: 'Sweden', timezone: 'Europe/Stockholm', offset: 'UTC+1' },
+    { city: 'Oslo', country: 'Norway', timezone: 'Europe/Oslo', offset: 'UTC+1' },
+    { city: 'Copenhagen', country: 'Denmark', timezone: 'Europe/Copenhagen', offset: 'UTC+1' },
+    { city: 'Helsinki', country: 'Finland', timezone: 'Europe/Helsinki', offset: 'UTC+2' },
+    { city: 'Warsaw', country: 'Poland', timezone: 'Europe/Warsaw', offset: 'UTC+1' },
+    { city: 'Prague', country: 'Czech Republic', timezone: 'Europe/Prague', offset: 'UTC+1' },
+    { city: 'Budapest', country: 'Hungary', timezone: 'Europe/Budapest', offset: 'UTC+1' },
+    { city: 'Athens', country: 'Greece', timezone: 'Europe/Athens', offset: 'UTC+2' },
+    { city: 'Istanbul', country: 'Turkey', timezone: 'Europe/Istanbul', offset: 'UTC+3' },
+    { city: 'Moscow', country: 'Russia', timezone: 'Europe/Moscow', offset: 'UTC+3' },
+    { city: 'Dublin', country: 'Ireland', timezone: 'Europe/Dublin', offset: 'UTC+0' },
+    { city: 'Lisbon', country: 'Portugal', timezone: 'Europe/Lisbon', offset: 'UTC+0' },
+
+    // Asia
+    { city: 'Dubai', country: 'UAE', timezone: 'Asia/Dubai', offset: 'UTC+4' },
+    { city: 'Mumbai', country: 'India', timezone: 'Asia/Kolkata', offset: 'UTC+5:30' },
+    { city: 'Delhi', country: 'India', timezone: 'Asia/Kolkata', offset: 'UTC+5:30' },
+    { city: 'Bangalore', country: 'India', timezone: 'Asia/Kolkata', offset: 'UTC+5:30' },
+    { city: 'Singapore', country: 'Singapore', timezone: 'Asia/Singapore', offset: 'UTC+8' },
+    { city: 'Hong Kong', country: 'Hong Kong', timezone: 'Asia/Hong_Kong', offset: 'UTC+8' },
+    { city: 'Tokyo', country: 'Japan', timezone: 'Asia/Tokyo', offset: 'UTC+9' },
+    { city: 'Seoul', country: 'South Korea', timezone: 'Asia/Seoul', offset: 'UTC+9' },
+    { city: 'Beijing', country: 'China', timezone: 'Asia/Shanghai', offset: 'UTC+8' },
+    { city: 'Shanghai', country: 'China', timezone: 'Asia/Shanghai', offset: 'UTC+8' },
+    { city: 'Bangkok', country: 'Thailand', timezone: 'Asia/Bangkok', offset: 'UTC+7' },
+    { city: 'Kuala Lumpur', country: 'Malaysia', timezone: 'Asia/Kuala_Lumpur', offset: 'UTC+8' },
+    { city: 'Jakarta', country: 'Indonesia', timezone: 'Asia/Jakarta', offset: 'UTC+7' },
+    { city: 'Manila', country: 'Philippines', timezone: 'Asia/Manila', offset: 'UTC+8' },
+    { city: 'Hanoi', country: 'Vietnam', timezone: 'Asia/Ho_Chi_Minh', offset: 'UTC+7' },
+    { city: 'Taipei', country: 'Taiwan', timezone: 'Asia/Taipei', offset: 'UTC+8' },
+    { city: 'Karachi', country: 'Pakistan', timezone: 'Asia/Karachi', offset: 'UTC+5' },
+    { city: 'Dhaka', country: 'Bangladesh', timezone: 'Asia/Dhaka', offset: 'UTC+6' },
+    { city: 'Riyadh', country: 'Saudi Arabia', timezone: 'Asia/Riyadh', offset: 'UTC+3' },
+    { city: 'Tel Aviv', country: 'Israel', timezone: 'Asia/Jerusalem', offset: 'UTC+2' },
+
+    // Africa
+    { city: 'Cairo', country: 'Egypt', timezone: 'Africa/Cairo', offset: 'UTC+2' },
+    { city: 'Lagos', country: 'Nigeria', timezone: 'Africa/Lagos', offset: 'UTC+1' },
+    { city: 'Nairobi', country: 'Kenya', timezone: 'Africa/Nairobi', offset: 'UTC+3' },
+    { city: 'Johannesburg', country: 'South Africa', timezone: 'Africa/Johannesburg', offset: 'UTC+2' },
+    { city: 'Cape Town', country: 'South Africa', timezone: 'Africa/Johannesburg', offset: 'UTC+2' },
+    { city: 'Casablanca', country: 'Morocco', timezone: 'Africa/Casablanca', offset: 'UTC+0' },
+    { city: 'Accra', country: 'Ghana', timezone: 'Africa/Accra', offset: 'UTC+0' },
+    { city: 'Addis Ababa', country: 'Ethiopia', timezone: 'Africa/Addis_Ababa', offset: 'UTC+3' },
+
+    // Oceania
+    { city: 'Sydney', country: 'Australia', timezone: 'Australia/Sydney', offset: 'UTC+10' },
+    { city: 'Melbourne', country: 'Australia', timezone: 'Australia/Melbourne', offset: 'UTC+10' },
+    { city: 'Brisbane', country: 'Australia', timezone: 'Australia/Brisbane', offset: 'UTC+10' },
+    { city: 'Perth', country: 'Australia', timezone: 'Australia/Perth', offset: 'UTC+8' },
+    { city: 'Auckland', country: 'New Zealand', timezone: 'Pacific/Auckland', offset: 'UTC+12' },
+    { city: 'Wellington', country: 'New Zealand', timezone: 'Pacific/Auckland', offset: 'UTC+12' },
+    { city: 'Fiji', country: 'Fiji', timezone: 'Pacific/Fiji', offset: 'UTC+12' }
+];
+
+function initializeTimezonePicker() {
+    const searchInput = document.getElementById('timezone-search');
+    const dropdown = document.getElementById('timezone-dropdown');
+    const timezoneList = document.getElementById('timezone-list');
+    const hiddenInput = document.getElementById('user-timezone');
+    const displayEl = document.getElementById('timezone-display');
+
+    if (!searchInput || !dropdown || !timezoneList) return;
+
+    let selectedTimezone = null;
+
+    // Render timezone list
+    function renderTimezones(filter = '') {
+        const filtered = timezoneData.filter(tz =>
+            tz.city.toLowerCase().includes(filter.toLowerCase()) ||
+            tz.country.toLowerCase().includes(filter.toLowerCase()) ||
+            tz.timezone.toLowerCase().includes(filter.toLowerCase())
+        );
+
+        timezoneList.innerHTML = filtered.map(tz => `
+            <div class="timezone-item" data-timezone="${tz.timezone}">
+                <div class="timezone-item-city">${tz.city}, ${tz.country}</div>
+                <div class="timezone-item-details">
+                    <span class="timezone-item-offset">${tz.offset}</span>
+                    <span>${tz.timezone}</span>
+                </div>
+            </div>
+        `).join('');
+
+        // Add click handlers
+        timezoneList.querySelectorAll('.timezone-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const timezone = item.dataset.timezone;
+                const tzData = timezoneData.find(tz => tz.timezone === timezone);
+                selectTimezone(tzData);
+            });
+        });
+    }
+
+    // Select timezone
+    function selectTimezone(tzData) {
+        selectedTimezone = tzData;
+        hiddenInput.value = tzData.timezone;
+        searchInput.value = `${tzData.city}, ${tzData.country}`;
+        displayEl.textContent = `${tzData.timezone} (${tzData.offset})`;
+        dropdown.classList.remove('active');
+    }
+
+    // Show/hide dropdown
+    searchInput.addEventListener('focus', () => {
+        dropdown.classList.add('active');
+        renderTimezones(searchInput.value);
+    });
+
+    searchInput.addEventListener('input', (e) => {
+        renderTimezones(e.target.value);
+        dropdown.classList.add('active');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.classList.remove('active');
+        }
+    });
+
+    // Load existing timezone if present
+    const existingTimezone = hiddenInput.value;
+    if (existingTimezone) {
+        const tzData = timezoneData.find(tz => tz.timezone === existingTimezone);
+        if (tzData) {
+            searchInput.value = `${tzData.city}, ${tzData.country}`;
+            displayEl.textContent = `${tzData.timezone} (${tzData.offset})`;
+        }
+    }
+
+    // Initial render
+    renderTimezones();
+}
+
+// Initialize timezone picker when user profile page loads
+const originalLoadUserProfile = loadUserProfile;
+loadUserProfile = async function () {
+    await originalLoadUserProfile();
+    initializeTimezonePicker();
+};

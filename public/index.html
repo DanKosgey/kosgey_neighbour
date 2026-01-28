@@ -511,7 +511,25 @@
                             </div>
                             <div class="form-group">
                                 <label>Timezone</label>
-                                <input type="text" id="user-timezone" placeholder="EST">
+                                <div class="timezone-picker-wrapper">
+                                    <input type="text" id="timezone-search" placeholder="Search for a city..."
+                                        autocomplete="off">
+                                    <input type="hidden" id="user-timezone">
+                                    <div class="timezone-dropdown" id="timezone-dropdown">
+                                        <div class="timezone-dropdown-header">
+                                            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                                                <path fill-rule="evenodd"
+                                                    d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                                                    clip-rule="evenodd" />
+                                            </svg>
+                                            <span>Select your city</span>
+                                        </div>
+                                        <div class="timezone-list" id="timezone-list">
+                                            <!-- Populated by JavaScript -->
+                                        </div>
+                                    </div>
+                                </div>
+                                <small class="timezone-display" id="timezone-display"></small>
                             </div>
                         </div>
                     </div>

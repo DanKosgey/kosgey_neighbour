@@ -1,11 +1,12 @@
 
-import cron from 'node-cron';
+import cron, { ScheduledTask } from 'node-cron';
 import { WhatsAppClient } from '../core/whatsapp';
 import { ownerService } from './ownerService';
 import { getDailySummary } from './ai/ownerTools';
 
 export class SchedulerService {
     private client: WhatsAppClient | undefined;
+    private tasks: ScheduledTask[] = [];
 
     init(client: WhatsAppClient) {
         this.client = client;
@@ -13,22 +14,35 @@ export class SchedulerService {
     }
 
     start() {
+        // Stop existing tasks to prevent duplicates
+        this.stop();
+
         console.log('⏰ Starting Scheduler Service...');
 
         // 1. Morning Motivation (7:00 AM)
         // Cron format: Minute Hour Day Month DayOfWeek
-        cron.schedule('0 7 * * *', async () => {
+        const morningTask = cron.schedule('0 7 * * *', async () => {
             console.log('🌅 Running morning motivation task...');
             await this.sendMorningMotivation();
         });
+        this.tasks.push(morningTask);
 
         // 2. Evening Summary (9:00 PM)
-        cron.schedule('0 21 * * *', async () => {
+        const eveningTask = cron.schedule('0 21 * * *', async () => {
             console.log('🌙 Running evening summary task...');
             await this.sendEveningSummary();
         });
+        this.tasks.push(eveningTask);
 
-        console.log('✅ Scheduler initialized with jobs: Morning (7am), Evening (9pm)');
+        console.log(`✅ Scheduler initialized with ${this.tasks.length} jobs: Morning (7am), Evening (9pm)`);
+    }
+
+    stop() {
+        if (this.tasks.length > 0) {
+            console.log(`🛑 Stopping ${this.tasks.length} active scheduler tasks...`);
+            this.tasks.forEach(task => task.stop());
+            this.tasks = [];
+        }
     }
 
     private async sendMorningMotivation() {
