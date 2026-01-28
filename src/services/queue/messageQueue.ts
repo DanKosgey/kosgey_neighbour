@@ -43,8 +43,9 @@ export interface QueueMetrics {
 
 export class MessageQueue {
     private metricsInterval: NodeJS.Timeout | null = null;
+    private cleanupInterval: NodeJS.Timeout | null = null;
     private readonly MAX_RETRY_COUNT = 3;
-    private readonly STALE_MESSAGE_HOURS = 24;
+    private readonly STALE_MESSAGE_HOURS = 1; // REDUCED from 24 to 1 hour for memory efficiency
 
     constructor(
         private readonly persistenceEnabled: boolean = true,
@@ -174,6 +175,11 @@ export class MessageQueue {
         });
 
         console.log(`✅ Message ${messageId} completed`);
+
+        // Trigger cleanup periodically (every 10th completion) to prevent memory bloat
+        if (messageId % 10 === 0) {
+            this.cleanup().catch(err => console.error('Cleanup error:', err));
+        }
     }
 
     /**
@@ -386,6 +392,16 @@ export class MessageQueue {
                 console.error('Error collecting queue metrics:', error);
             }
         }, 60000);
+
+        // Run cleanup every 5 minutes to prevent memory bloat
+        this.cleanupInterval = setInterval(async () => {
+            try {
+                await this.cleanup();
+                await this.restoreStuckMessages();
+            } catch (error) {
+                console.error('Error during periodic cleanup:', error);
+            }
+        }, 5 * 60 * 1000); // 5 minutes
     }
 
     /**
@@ -395,6 +411,10 @@ export class MessageQueue {
         if (this.metricsInterval) {
             clearInterval(this.metricsInterval);
             this.metricsInterval = null;
+        }
+        if (this.cleanupInterval) {
+            clearInterval(this.cleanupInterval);
+            this.cleanupInterval = null;
         }
     }
 
