@@ -90,7 +90,8 @@ export class WebScraper {
                     if (lowerQuery.includes('bitcoin') || lowerQuery.includes('crypto')) {
                         return 'https://coinmarketcap.com';
                     }
-                    return 'https://www.bloomberg.com';
+                    // Bloomberg is too heavy (causes memory crashes), use Reuters instead
+                    return 'https://www.reuters.com/markets';
                 case 'weather':
                     return 'https://weather.com';
             }
@@ -180,14 +181,16 @@ export class WebScraper {
     /**
      * Fetch HTML from URL
      */
-    private async fetchHtml(url: string): Promise<string> {
+    private async fetchHtml(url: string): Promise<string> { // Fetch the URL with strict size limits to prevent memory overflow
         const response = await axios.get(url, {
             timeout: CONFIG.TIMEOUT_MS,
             headers: {
                 'User-Agent': CONFIG.USER_AGENT,
             },
+            maxContentLength: 2 * 1024 * 1024, // 2MB max (prevents Bloomberg/large sites from crashing)
+            maxBodyLength: 2 * 1024 * 1024,    // 2MB max
             maxRedirects: 5,
-            validateStatus: (status) => status >= 200 && status < 400,
+            validateStatus: (status) => status < 500 // Accept 4xx but not 5xx
         });
 
         return response.data;
