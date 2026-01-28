@@ -104,8 +104,12 @@ export class WebScraper {
         if (lowerQuery.includes('bitcoin') || lowerQuery.includes('crypto') || lowerQuery.includes('ethereum')) {
             return 'https://coinmarketcap.com';
         }
+        if (lowerQuery.includes('interest') && lowerQuery.includes('rate')) {
+            return 'https://tradingeconomics.com/united-states/interest-rate';
+        }
         if (lowerQuery.includes('stock') || lowerQuery.includes('market') || lowerQuery.includes('finance')) {
-            return 'https://www.bloomberg.com';
+            // Bloomberg is too heavy, use Yahoo Finance or Reuters
+            return 'https://finance.yahoo.com';
         }
         if (lowerQuery.includes('sport') || lowerQuery.includes('football') || lowerQuery.includes('soccer') ||
             lowerQuery.includes('basketball') || lowerQuery.includes('tennis')) {
