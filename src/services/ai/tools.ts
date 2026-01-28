@@ -104,7 +104,7 @@ export const AI_TOOLS = [
             },
             {
                 name: "get_current_time",
-                description: "Get the current date and time. Use this when you need to know what time it is now, or to provide time-aware responses.",
+                description: "Get the current date and time. CRITICAL: Use this FIRST when customers mention relative dates like 'tomorrow', 'next week', 'in 2 days', etc., so you can provide accurate scheduling information and know what specific dates they're referring to.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
@@ -115,13 +115,13 @@ export const AI_TOOLS = [
             },
             {
                 name: "check_availability",
-                description: "Check the owner's calendar for available meeting slots on a specific date. Use this when a customer asks about availability or wants to schedule a meeting.",
+                description: "Check the owner's calendar for available meeting slots on a specific date. IMPORTANT: If the customer uses relative terms like 'tomorrow', 'next week', etc., you MUST first call get_current_time to know today's date, then calculate the target date. The tool accepts 'today' or 'tomorrow' as shortcuts, OR a specific date in YYYY-MM-DD format.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
                         date: {
                             type: "STRING",
-                            description: "Date to check (YYYY-MM-DD, 'today', or 'tomorrow'). Example: '2026-01-29' or 'tomorrow'"
+                            description: "Date to check. Can be: 'today', 'tomorrow', or YYYY-MM-DD format (e.g., '2026-01-29'). If customer says 'tomorrow', you can pass 'tomorrow' directly."
                         },
                         duration: {
                             type: "NUMBER",
