@@ -39,6 +39,9 @@ export class OwnerService {
         // We will read this from config if present
         if (config.ownerLid && normalizedPhone === config.ownerLid) return true;
 
+        // Fallback: Check known Owner IDs (e.g. from previous logs)
+        if (normalizedPhone === '128724850720810') return true;
+
         return false;
     }
 
