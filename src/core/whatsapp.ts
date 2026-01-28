@@ -560,6 +560,9 @@ export class WhatsAppClient {
         sanitizeProfile(currentUserProfile),
         systemPrompt
       );
+      console.log(`🧠 Gemini Response Type: ${geminiResponse.type}`);
+      if (geminiResponse.type === 'text') console.log(`📝 Text Content: "${geminiResponse.content?.substring(0, 50)}..."`);
+      if (geminiResponse.type === 'tool_call') console.log(`🛠️ Initial Tool Call: ${geminiResponse.functionCall?.name}`);
     } catch (error: any) {
       if ((error.status === 429 || error.code === 429 || error.message === 'ALL_KEYS_EXHAUSTED')) {
         // Queue message for later processing
@@ -634,6 +637,7 @@ export class WhatsAppClient {
 
   // Helper to deduplicate sending logic
   private async sendResponseAndLog(remoteJid: string, responseText: string, contact: any, history: string[], userText: string) {
+    console.log(`📤 Sending Response to ${remoteJid}: "${responseText.substring(0, 50)}..."`);
     let finalResponse = responseText;
     let shouldEndSession = false;
 
