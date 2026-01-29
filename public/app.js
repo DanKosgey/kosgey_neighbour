@@ -21,8 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // Theme Logic
 // Theme Logic
 function initializeTheme() {
-    // Select all theme toggles (desktop and mobile)
-    const toggleBtns = document.querySelectorAll('.theme-toggle');
+    // Select all theme toggles (desktop sidebar and mobile settings page)
+    const toggleBtns = document.querySelectorAll('.theme-toggle, .theme-toggle-btn, #mobile-theme-toggle');
 
     // Check saved theme or system preference
     const savedTheme = localStorage.getItem('theme');
