@@ -236,6 +236,9 @@ body {
     padding: 2rem 1.5rem;
     border-bottom: 1px solid var(--border);
     position: relative;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
 }
 
 .sidebar-header::after {
