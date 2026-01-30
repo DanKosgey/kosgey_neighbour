@@ -240,7 +240,8 @@ export const AI_TOOLS = [
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        type: { type: "STRING", description: "Type of post: 'ad_morning', 'ad_afternoon', 'ad_evening', 'fact_morning', 'fact_afternoon', 'fact_evening'." }
+                        type: { type: "STRING", description: "Type of post: 'ad_morning', 'ad_afternoon', 'ad_evening', 'fact_morning', 'fact_afternoon', 'fact_evening'." },
+                        custom_instructions: { type: "STRING", description: "Optional instructions for what the ad should say. E.g. 'Announce the agent is back online', 'Promote our new 50% discount'. If provided, this overrides the default random style." }
                     },
                     required: ["type"]
                 }
@@ -512,13 +513,16 @@ export async function executeLocalTool(name: string, args: any, context: any) {
 
                     // Trigger the ACTUAL broadcast logic
                     console.log(`🚀 Tool 'post_now' triggering broadcast for slot: ${args.type}`);
+                    if (args.custom_instructions) {
+                        console.log(`📝 Custom Instructions: "${args.custom_instructions}"`);
+                    }
 
                     // Execute in background to avoid timeout and double-execution by agent
-                    marketingService.executeMarketingSlot(client, args.type)
+                    marketingService.executeMarketingSlot(client, args.type, args.custom_instructions)
                         .catch(err => console.error(`❌ Background broadcast failed for ${args.type}:`, err));
 
                     return {
-                        result: `✅ Broadcast command sent successfully for '${args.type}'.\nThe ad is being generated and sent to all target groups in the background.`
+                        result: `✅ Broadcast command sent successfully for '${args.type}'.\nThe ad is being generated${args.custom_instructions ? ' with your custom instructions' : ''} and sent to all target groups in the background.`
                     };
 
                 } else {

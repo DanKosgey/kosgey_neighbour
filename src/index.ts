@@ -528,33 +528,43 @@ app.get('/api/marketing/campaigns', async (req, res) => {
 
 app.get('/api/marketing/groups', async (req, res) => {
     try {
+        console.log('🔍 API Hit: /api/marketing/groups');
+
         if (!whatsappClient) {
+            console.error('❌ WhatsApp client is undefined');
             return res.json({ success: false, error: 'WhatsApp client not initialized' });
         }
 
+        const status = whatsappClient.getStatus();
+        console.log('📊 WhatsApp Status:', status);
+
         const groupJids = await whatsappClient.getAllGroups();
+        console.log(`📦 Fetched ${groupJids.length} group JIDs`);
 
-        // Get active campaign to check selected groups
-        const activeCampaign = await db.query.marketingCampaigns.findFirst({
-            where: eq(marketingCampaigns.status, 'active')
-        });
+        const campaignId = req.query.campaignId ? parseInt(req.query.campaignId as string) : null;
 
-        const selectedGroups = (activeCampaign?.targetGroups as any as string[]) || [];
-        // If no targetGroups defined (legacy), defaulting to ALL being selected is safer logic-wise for now, 
-        // OR we can make the UI handle it. 
-        // Let's assume: empty targetGroups = broadcast to all (legacy behavior) 
-        // BUT for UI, if it's null, we might want to check all by default.
-        const isLegacy = !(activeCampaign?.targetGroups as any);
+        let selectedGroups: string[] = [];
+
+        if (campaignId) {
+            // Fetch specific campaign
+            const campaign = await db.query.marketingCampaigns.findFirst({
+                where: eq(marketingCampaigns.id, campaignId)
+            });
+            selectedGroups = (campaign?.targetGroups as any as string[]) || [];
+        } else {
+            selectedGroups = [];
+        }
 
         // Fetch group metadata for each group
         const groups = await Promise.all(groupJids.map(async (jid: string) => {
             try {
+                const isSelected = selectedGroups.includes(jid);
                 const metadata = await whatsappClient['sock']?.groupMetadata(jid);
                 return {
                     id: jid,
                     name: metadata?.subject || 'Unknown Group',
                     participants: metadata?.participants?.length || 0,
-                    selected: isLegacy ? true : selectedGroups.includes(jid)
+                    selected: isSelected
                 };
             } catch (error) {
                 console.error(`Failed to fetch metadata for ${jid}:`, error);
@@ -562,7 +572,7 @@ app.get('/api/marketing/groups', async (req, res) => {
                     id: jid,
                     name: 'Unknown Group',
                     participants: 0,
-                    selected: isLegacy ? true : selectedGroups.includes(jid)
+                    selected: selectedGroups.includes(jid)
                 };
             }
         }));

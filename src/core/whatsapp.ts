@@ -84,13 +84,22 @@ export class WhatsAppClient {
 
   public async getAllGroups(): Promise<string[]> {
     if (!this.sock) {
-      console.log('⚠️ WhatsApp not connected, cannot fetch groups');
+      console.log('⚠️ WhatsApp not connected, cannot fetch groups (sock is undefined)');
       return [];
     }
     try {
-      const groups = await this.sock.groupFetchAllParticipating();
-      const groupJids = Object.keys(groups);
-      console.log(`📢 Found ${groupJids.length} groups`);
+      console.log('🔄 Fetching participating groups...');
+      let groups = await this.sock.groupFetchAllParticipating();
+      let groupJids = Object.keys(groups);
+
+      if (groupJids.length === 0) {
+        console.log('⚠️ First fetch returned 0 groups. Waiting 2s and retrying...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        groups = await this.sock.groupFetchAllParticipating();
+        groupJids = Object.keys(groups);
+      }
+
+      console.log(`📢 Found ${groupJids.length} groups:`, groupJids);
       return groupJids;
     } catch (error) {
       console.error('❌ Failed to fetch groups:', error);

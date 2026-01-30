@@ -91,7 +91,7 @@ export class AdContentService {
     /**
      * Generate complete ad content (Text + Image URL/Path)
      */
-    public async generateAd(campaignId: number, styleHint: string = 'balanced'): Promise<{ text: string, imagePath?: string }> {
+    public async generateAd(campaignId: number, styleHint: string = 'balanced', customInstructions?: string): Promise<{ text: string, imagePath?: string }> {
         // 1. Fetch Campaign
         const campaign = await db.query.marketingCampaigns.findFirst({
             where: eq(marketingCampaigns.id, campaignId)
@@ -116,9 +116,13 @@ export class AdContentService {
         const timeContext = this.extractTimeContext(styleHint);
 
         // 5. Generate Copy (with framework)
-        const adCopy = await this.generateAdCopy(profile, style, timeContext, framework);
+        const adCopy = await this.generateAdCopy(profile, style, timeContext, framework, customInstructions);
 
         // 6. Generate Image
+        // If Custom Instructions are present, maybe modify image prompt too?
+        // For now, let's keep image consistent with product unless instructions explicitly ask (complex).
+        // We'll stick to standard image generation for stability, or append a note.
+        // Let's just trust the product context for image.
         const imagePrompt = this.constructImagePrompt(profile, style, timeContext);
         let imagePath: string | undefined;
 
@@ -158,10 +162,20 @@ export class AdContentService {
         return { style, timeContext };
     }
 
-    private async generateAdCopy(profile: any, style: VisualStyle, timeContext: TimeOfDay, framework: PitchFramework): Promise<any> {
+    private async generateAdCopy(profile: any, style: VisualStyle, timeContext: TimeOfDay, framework: PitchFramework, customInstructions?: string): Promise<any> {
         const shopContext = `Brand: ${profile.productInfo}, Industry: ${profile.targetAudience}. USP: ${profile.uniqueSellingPoint}. Voice: ${profile.brandVoice}`;
 
         const frameworkInstructions = this.getFrameworkInstructions(framework);
+
+        let instructionBlock = "";
+        if (customInstructions) {
+            instructionBlock = `
+            CRITICAL OVERRIDE INSTRUCTIONS:
+            The user has explicitly requested: "${customInstructions}".
+            You MUST IGNORE the standard style/framework rules if they conflict with this.
+            Focus ENTIRELY on fulfilling this specific request while maintaining the brand voice.
+            `;
+        }
 
         const prompt = `You are a Senior Creative Director. ${shopContext}
         Generate a WhatsApp ad variant for:
@@ -174,6 +188,8 @@ export class AdContentService {
         
         ${frameworkInstructions}
 
+        ${instructionBlock}
+ 
         Guidelines:
         - Adapt hooks for the ${timeContext} mindset.
         - Include high-impact emojis.

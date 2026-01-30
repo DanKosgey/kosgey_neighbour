@@ -92,6 +92,9 @@ export class MarketingService {
     /**
      * Create a basic weekly campaign
      */
+    /**
+     * Create a basic weekly campaign
+     */
     public async createCampaign(
         name: string = "AutoAds Weekly",
         morningTime: string = "07:00",
@@ -106,6 +109,18 @@ export class MarketingService {
     ): Promise<string> {
         if (!await this.hasProfile() && (!businessContext || !businessContext.productInfo)) {
             return "❌ Please complete the onboarding first or provide campaign details."
+        }
+
+        // Check for duplicates
+        const existingCampaign = await db.query.marketingCampaigns.findFirst({
+            where: (campaigns, { eq, and, or }) => and(
+                eq(campaigns.name, name),
+                or(eq(campaigns.status, 'active'), eq(campaigns.status, 'paused'))
+            )
+        });
+
+        if (existingCampaign) {
+            throw new Error(`A campaign with the name '${name}' already exists. Please choose a different name.`);
         }
 
         // Create Campaign Entry
@@ -142,6 +157,21 @@ export class MarketingService {
         brandVoice?: string,
         targetGroups?: any
     }): Promise<void> {
+        // If name is being updated, check for duplicates
+        if (updates.name) {
+            const existingCampaign = await db.query.marketingCampaigns.findFirst({
+                where: (campaigns, { eq, and, or, ne }) => and(
+                    eq(campaigns.name, updates.name!),
+                    or(eq(campaigns.status, 'active'), eq(campaigns.status, 'paused')),
+                    ne(campaigns.id, id) // Exclude self
+                )
+            });
+
+            if (existingCampaign) {
+                throw new Error(`A campaign with the name '${updates.name}' already exists.`);
+            }
+        }
+
         await db.update(marketingCampaigns)
             .set(updates)
             .where(eq(marketingCampaigns.id, id));
@@ -155,14 +185,32 @@ export class MarketingService {
             .where(eq(marketingCampaigns.id, id));
     }
 
-    /**
-     * Execute a specific marketing slot (Ad or Fact)
-     * Called by Scheduler
-     */
-    public async executeMarketingSlot(client: any, slotType: 'ad_morning' | 'ad_afternoon' | 'ad_evening' | 'fact_morning' | 'fact_afternoon' | 'fact_evening') {
-        console.log(`🚀 Executing Marketing Slot: ${slotType}`);
 
-        // 1. Check for Active Campaigns (Fetch ALL active, not just first)
+    /**
+     * Execute a specific marketing slot for a SINGLE campaign
+     * Called by Dynamic Scheduler
+     */
+    public async executeSingleCampaignSlot(client: any, campaign: any, slotType: string, customInstructions?: string) {
+        console.log(`🚀 Executing Single Campaign Slot: ${slotType} for '${campaign.name}'`);
+        try {
+            if (slotType.startsWith('ad')) {
+                await this.handleAdSlot(client, campaign, slotType, customInstructions);
+            } else {
+                await this.handleFactSlot(client, slotType, campaign);
+            }
+        } catch (e) {
+            console.error(`❌ Failed to execute campaign ${campaign.name}:`, e);
+        }
+    }
+
+    /**
+     * Execute a specific marketing slot (Ad or Fact) - LEGACY / MASS TRIGGER
+     * Kept for backward compatibility or manual triggers
+     */
+    public async executeMarketingSlot(client: any, slotType: 'ad_morning' | 'ad_afternoon' | 'ad_evening' | 'fact_morning' | 'fact_afternoon' | 'fact_evening', customInstructions?: string) {
+        console.log(`🚀 Executing Marketing Slot (Mass): ${slotType}`);
+
+        // 1. Check for Active Campaigns (Fetch ALL active)
         const campaigns = await db.query.marketingCampaigns.findMany({
             where: eq(marketingCampaigns.status, 'active')
         });
@@ -175,27 +223,11 @@ export class MarketingService {
         console.log(`📢 Found ${campaigns.length} active campaigns to execute.`);
 
         // 2. Execute based on slot type for EACH campaign
-        for (const campaign of campaigns) {
-            try {
-                console.log(`👉 Running campaign: "${campaign.name}" (ID: ${campaign.id})`);
-                if (slotType.startsWith('ad')) {
-                    await this.handleAdSlot(client, campaign, slotType);
-                } else {
-                    await this.handleFactSlot(client, slotType); // Fact slot might be global? Or per campaign?
-                    // Facts are usually global entertaiment. 
-                    // If we run fact slot 5 times for 5 campaigns, we spam users.
-                    // Facts should probably only run ONCE per slot, not per campaign.
-                    // But if handleFactSlot sends to "all groups", we might want to be careful.
-                    // For now, let's assume Facts are Global and run only ONCE total?
-                    // OR, do we bind facts to campaigns?
-                    // The prompt "multi tasking campaigns" implies AD campaigns.
-                    // Let's break the loop for FACTS after first run?
-                    // Or check if slotType starts with 'ad'.
-                }
-            } catch (e) {
-                console.error(`❌ Failed to execute campaign ${campaign.name}:`, e);
-            }
-        }
+        const executions = campaigns.map(async (campaign) => {
+            await this.executeSingleCampaignSlot(client, campaign, slotType, customInstructions);
+        });
+
+        await Promise.all(executions);
     }
 
     private async getBroadcastGroups(client: any, campaign: any): Promise<string[]> {
@@ -220,7 +252,7 @@ export class MarketingService {
         return allGroups;
     }
 
-    private async handleAdSlot(client: any, campaign: any, slot: string) {
+    private async handleAdSlot(client: any, campaign: any, slot: string, customInstructions?: string) {
         const { adContentService } = await import('./adContentService');
 
         // Determine style based on slot
@@ -232,7 +264,8 @@ export class MarketingService {
         // Check if forced text-only mode
         const forceTextOnly = process.env.FORCE_TEXT_ONLY_ADS === 'true';
 
-        const ad = await adContentService.generateAd(campaign.id, style);
+        // Pass customInstructions if available
+        const ad = await adContentService.generateAd(campaign.id, style, customInstructions);
 
         // LOG CONTENT FOR USER VERIFICATION
         console.log('\n📜 [GENERATED AD CONTENT]:');
@@ -309,7 +342,7 @@ export class MarketingService {
         }
     }
 
-    private async handleFactSlot(client: any, slot: string) {
+    private async handleFactSlot(client: any, slot: string, campaign?: any) {
         const { factService } = await import('./factService');
 
         let timeOfDay: 'morning' | 'afternoon' | 'evening' = 'morning';
@@ -321,8 +354,8 @@ export class MarketingService {
 
         const message = `🎲 *Random Fact*\n\n${fact}`;
 
-        // Get all groups to broadcast to
-        const groups = await this.getBroadcastGroups(client, null);
+        // Get groups based on the campaign (if provided), or global fallback
+        const groups = await this.getBroadcastGroups(client, campaign);
 
         if (groups.length === 0) {
             console.log('⚠️ No groups found to broadcast fact to');

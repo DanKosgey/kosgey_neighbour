@@ -1,0 +1,219 @@
+/* ------------------------------- */
+/*  MINI TABS UI STYLES           */
+/* ------------------------------- */
+
+.marketing-header-simple {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.marketing-header-simple h2 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+/* Mini Tabs Nav */
+.mini-tabs-container {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    /* Scrollbar space */
+}
+
+.mini-tab {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 0.5rem 1.25rem;
+    border-radius: 99px;
+    /* Pill shape */
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.mini-tab:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.mini-tab.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+    box-shadow: 0 4px 12px rgba(168, 85, 247, 0.3);
+}
+
+/* Views */
+.mini-view {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.mini-view.active {
+    display: block;
+}
+
+.view-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+/* Stats */
+.marketing-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-bubble {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    border-radius: 20px;
+    text-align: center;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.stat-val {
+    font-size: 2rem;
+    font-weight: 700;
+    color: white;
+    margin-top: 0.5rem;
+}
+
+/* Quick Actions */
+.quick-actions-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.action-card-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    transition: transform 0.2s, background 0.2s;
+}
+
+.action-card-btn:hover {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--primary);
+}
+
+.action-icon {
+    font-size: 2.5rem;
+}
+
+.action-card-btn span {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Lists Grid */
+.mini-list-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+.scrollable-list {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.mini-card {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid var(--border);
+    padding: 1rem;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+}
+
+.mini-card h4 {
+    margin: 0 0 0.5rem 0;
+    color: white;
+}
+
+.mini-card p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+.status-dot.active {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+}
+
+.status-dot.paused {
+    background: var(--warning);
+}
+
+/* Forms */
+.form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+}
+
+.full-width {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+.mini-select-box {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.5rem;
+    border-radius: 8px;
+    height: 100px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+}
+
+@media (max-width: 768px) {
+    .marketing-stat-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .quick-actions-row {
+        grid-template-columns: 1fr;
+    }
+
+    .form-row-2 {
+        grid-template-columns: 1fr;
+    }
+}
