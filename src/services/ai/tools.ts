@@ -503,9 +503,14 @@ export async function executeLocalTool(name: string, args: any, context: any) {
                 const { adContentService } = await import('../marketing/adContentService');
                 const { factService } = await import('../marketing/factService');
 
-                if (args.type.startsWith('ad')) {
+                if (args.type.startsWith('ad') || args.type.startsWith('fact')) {
                     const client = context?.client;
                     if (!client) {
+                        // Fallback: If no client in context (e.g. testing), just return the content
+                        if (args.type.startsWith('fact')) {
+                            const fact = await factService.getSmartFact('morning');
+                            return { result: `(Simulation) 🎲 *Random Fact*\n\n${fact}` };
+                        }
                         return { error: "WhatsApp Client not available in context. Cannot broadcast." };
                     }
 
@@ -517,21 +522,15 @@ export async function executeLocalTool(name: string, args: any, context: any) {
                         console.log(`📝 Custom Instructions: "${args.custom_instructions}"`);
                     }
 
-                    // Execute in background to avoid timeout and double-execution by agent
+                    // Execute in background
                     marketingService.executeMarketingSlot(client, args.type, args.custom_instructions)
                         .catch(err => console.error(`❌ Background broadcast failed for ${args.type}:`, err));
 
                     return {
-                        result: `✅ Broadcast command sent successfully for '${args.type}'.\nThe ad is being generated${args.custom_instructions ? ' with your custom instructions' : ''} and sent to all target groups in the background.`
+                        result: `✅ Broadcast command sent successfully for '${args.type}'.\nThe content is being generated${args.custom_instructions ? ' with your custom instructions' : ''} and sent to all target groups in the background.`
                     };
-
                 } else {
-                    let time = 'morning';
-                    if (args.type.includes('afternoon')) time = 'afternoon';
-                    if (args.type.includes('evening')) time = 'evening';
-
-                    const fact = await factService.getSmartFact(time as any);
-                    return { result: `🎲 *Random Fact*\n\n${fact}` };
+                    return { error: "Invalid post type. Must start with 'ad' or 'fact'." };
                 }
             } catch (e: any) {
                 return { error: `Post now failed: ${e.message}` };
