@@ -12,6 +12,38 @@ import { webScraper } from '../webScraper';
 import { googleImageGenerationService } from '../googleImageGeneration';
 import { marketingCampaigns } from '../../database/schema';
 
+// Deduplication: Track recent tool calls to prevent double-execution
+const recentToolCalls = new Map<string, number>();
+const TOOL_DEDUP_WINDOW_MS = 10000; // 10 seconds
+
+function getToolCallKey(toolName: string, args: any): string {
+    return `${toolName}:${JSON.stringify(args)}`;
+}
+
+function isRecentDuplicate(toolName: string, args: any): boolean {
+    const key = getToolCallKey(toolName, args);
+    const lastCall = recentToolCalls.get(key);
+    const now = Date.now();
+
+    if (lastCall && (now - lastCall) < TOOL_DEDUP_WINDOW_MS) {
+        return true; // Duplicate within window
+    }
+
+    recentToolCalls.set(key, now);
+
+    // Cleanup old entries
+    if (recentToolCalls.size > 100) {
+        const cutoff = now - TOOL_DEDUP_WINDOW_MS;
+        for (const [k, timestamp] of recentToolCalls.entries()) {
+            if (timestamp < cutoff) {
+                recentToolCalls.delete(k);
+            }
+        }
+    }
+
+    return false;
+}
+
 export const AI_TOOLS = [
     {
         functionDeclarations: [
@@ -261,6 +293,11 @@ export const AI_TOOLS = [
 
 // Helper to execute tools locally
 export async function executeLocalTool(name: string, args: any, context: any) {
+    if (isRecentDuplicate(name, args)) {
+        console.warn(`⚠️ Skipping duplicate tool call: ${name} (Args: ${JSON.stringify(args)})`);
+        return { error: "Duplicate tool call ignored. Please wait a moment." };
+    }
+
     console.log(`🛠️ Executing Tool: ${name}`, args);
 
     switch (name) {
