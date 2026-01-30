@@ -556,13 +556,15 @@ app.put('/api/marketing/campaign/targets', async (req, res) => {
     }
 });
 
-// Catch-all route: Serve index.html for all non-API routes (SPA support)
-app.get('/*', (req, res) => {
-    // Don't intercept API routes
-    if (req.path.startsWith('/api/') || req.path.startsWith('/health') || req.path.startsWith('/ready')) {
-        return res.status(404).json({ error: 'Not Found' });
+// SPA fallback: Serve index.html for all non-API routes
+// This must be AFTER all API routes
+app.use((req, res, next) => {
+    // Only handle GET requests that aren't for API endpoints
+    if (req.method === 'GET' && !req.path.startsWith('/api/') && !req.path.startsWith('/health') && !req.path.startsWith('/ready')) {
+        res.sendFile(path.join(__dirname, '../public/index.html'));
+    } else {
+        next();
     }
-    res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 const start = async () => {
