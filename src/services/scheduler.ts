@@ -26,6 +26,59 @@ export class SchedulerService {
 
         this.tasks.push(task);
         console.log('✅ Scheduler initialized: Monitoring active campaigns every minute.');
+
+        // Random Content Every 2 Hours
+        // Runs at :00 minutes of every 2nd hour (00:00, 02:00, 04:00, etc.)
+        const randomContentTask = cron.schedule('0 */2 * * *', async () => {
+            this.broadcastRandomContent();
+        });
+
+        this.tasks.push(randomContentTask);
+        console.log('✅ Random content scheduler initialized: Every 2 hours.');
+    }
+
+    private async broadcastRandomContent() {
+        try {
+            console.log('🎲 Generating random content for broadcast...');
+            const { randomContentService } = await import('./marketing/randomContentService');
+
+            const randomContent = await randomContentService.generateRandomContent();
+            const message = randomContentService.formatForWhatsApp(randomContent);
+
+            if (!this.client) {
+                console.error('❌ WhatsApp client not available for random content broadcast');
+                return;
+            }
+
+            // Get all groups
+            const groups = await this.client.getAllGroups();
+
+            if (groups.length === 0) {
+                console.log('⚠️ No groups found for random content broadcast');
+                return;
+            }
+
+            console.log(`📢 Broadcasting random ${randomContent.type} to ${groups.length} groups...`);
+
+            // Send to all groups with delay
+            for (const groupJid of groups) {
+                try {
+                    await this.client.sendText(groupJid, message);
+                    console.log(`✅ Random content sent to ${groupJid}`);
+
+                    // Delay between groups to avoid rate limits
+                    if (groups.indexOf(groupJid) < groups.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 5000)); // 5 seconds
+                    }
+                } catch (error) {
+                    console.error(`❌ Failed to send random content to ${groupJid}:`, error);
+                }
+            }
+
+            console.log('✅ Random content broadcast complete');
+        } catch (error) {
+            console.error('❌ Random content broadcast failed:', error);
+        }
     }
 
     private async checkAndExecuteSlots() {

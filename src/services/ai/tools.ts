@@ -245,6 +245,15 @@ export const AI_TOOLS = [
                     },
                     required: ["type"]
                 }
+            },
+            {
+                name: "send_random",
+                description: "Send a random fun content (quote, joke, prediction, fact, riddle, or wisdom) to all groups immediately. Great for engagement!",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {},
+                    required: []
+                }
             }
         ]
     }
@@ -534,6 +543,58 @@ export async function executeLocalTool(name: string, args: any, context: any) {
                 }
             } catch (e: any) {
                 return { error: `Post now failed: ${e.message}` };
+            }
+
+        case 'send_random':
+            try {
+                const client = context?.client;
+                if (!client) {
+                    return { error: "WhatsApp Client not available in context. Cannot broadcast." };
+                }
+
+                const { randomContentService } = await import('../marketing/randomContentService');
+
+                console.log('🎲 Tool send_random: Generating random content...');
+
+                // Generate and broadcast in background
+                (async () => {
+                    try {
+                        const randomContent = await randomContentService.generateRandomContent();
+                        const message = randomContentService.formatForWhatsApp(randomContent);
+
+                        const groups = await client.getAllGroups();
+
+                        if (groups.length === 0) {
+                            console.log('⚠️ No groups found for random content');
+                            return;
+                        }
+
+                        console.log(`📢 Broadcasting random ${randomContent.type} to ${groups.length} groups...`);
+
+                        for (const groupJid of groups) {
+                            try {
+                                await client.sendText(groupJid, message);
+                                console.log(`✅ Random content sent to ${groupJid}`);
+
+                                if (groups.indexOf(groupJid) < groups.length - 1) {
+                                    await new Promise(resolve => setTimeout(resolve, 5000));
+                                }
+                            } catch (error) {
+                                console.error(`❌ Failed to send to ${groupJid}:`, error);
+                            }
+                        }
+
+                        console.log('✅ Random content broadcast complete');
+                    } catch (error) {
+                        console.error('❌ Random content broadcast failed:', error);
+                    }
+                })();
+
+                return {
+                    result: `🎲 Random content is being generated and sent to all groups! It could be a quote, joke, prediction, fact, riddle, or wisdom. Stay tuned! ✨`
+                };
+            } catch (e: any) {
+                return { error: `Send random failed: ${e.message}` };
             }
 
         default:
