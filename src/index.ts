@@ -557,7 +557,7 @@ app.put('/api/marketing/campaign/targets', async (req, res) => {
 });
 
 // Catch-all route: Serve index.html for all non-API routes (SPA support)
-app.get('*', (req, res) => {
+app.get('/*', (req, res) => {
     // Don't intercept API routes
     if (req.path.startsWith('/api/') || req.path.startsWith('/health') || req.path.startsWith('/ready')) {
         return res.status(404).json({ error: 'Not Found' });
