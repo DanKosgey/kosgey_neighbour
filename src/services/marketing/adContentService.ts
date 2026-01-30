@@ -118,31 +118,49 @@ export class AdContentService {
     private constructImagePrompt(profile: any, style: VisualStyle, timeContext: TimeOfDay, visualScenario: string): string {
         // Prioritize enhanced businessDescription if available
         const businessContext = profile.businessDescription || profile.productInfo || 'innovative product';
-        const detailedContext = profile.businessDescription
-            ? profile.businessDescription
-            : `${profile.uniqueSellingPoint || 'quality service'}. Target: ${profile.targetAudience || 'general audience'}`;
 
-        const isService = this.detectServiceBusiness(businessContext);
-        const subjectType = isService ? "SERVICE/CONCEPT" : "PHYSICAL PRODUCT";
+        // Simple color palettes for eye-catching visuals
+        const colorPalettes = [
+            'vibrant gradient (purple to pink)',
+            'bold solid color (electric blue or neon green)',
+            'warm sunset tones (orange, coral, yellow)',
+            'cool minimalist (white, light gray, soft blue)',
+            'energetic contrast (black and bright yellow)',
+            'fresh and clean (mint green and white)',
+            'modern tech (dark blue and cyan)',
+            'playful pop (hot pink and turquoise)'
+        ];
 
-        return `Professional Commercial Photography ($8k resolution, highly detailed).
-        Subject Type: ${subjectType}
-        Subject Description: "${profile.productInfo || businessContext}"
-        
-        VISUAL SCENARIO: ${visualScenario}
-        
-        Business Context: ${detailedContext}
-        
-        Visual Style: ${this.styleGuides[style]}
-        Lighting/Mood: ${this.timeInfluence[timeContext]}
-        
-        CRITICAL VISUAL GUIDELINES:
-        - PHOTOREALISTIC: Use 8k resolution, highly detailed textures.
-        - COMPOSITION: Rule-of-thirds or centered hero shot based on scenario.
-        - NO TEXT: Use absolutely NO text, logos, or watermarks in the image.
-        - NO DEFORMITIES: Fix hands/faces if human subjects are present.
-        - Make it look like a real advertisement from a premium magazine.
-        - INTERPRET CREATIVELY: If the product/service is abstract (like software/app), visualize it through metaphors, UI mockups, or conceptual representations.`;
+        const randomColor = colorPalettes[Math.floor(Math.random() * colorPalettes.length)];
+
+        // Simple visual concepts
+        const simpleVisuals = [
+            'floating 3D icon or symbol',
+            'abstract geometric shapes',
+            'minimalist illustration',
+            'bold typography design',
+            'simple product mockup',
+            'clean flat design',
+            'modern gradient background',
+            'eye-catching pattern'
+        ];
+
+        const randomVisual = simpleVisuals[Math.floor(Math.random() * simpleVisuals.length)];
+
+        return `Create a SIMPLE, EYE-CATCHING image for: "${businessContext}"
+
+STYLE: ${randomVisual} with ${randomColor} background
+
+RULES:
+- SIMPLE & CLEAN: Minimal elements, maximum impact
+- EYE-CATCHING: Bold colors, strong contrast, immediately grabs attention
+- NO TEXT: Absolutely no words, letters, or text in the image
+- CONTEXTUAL: Relates to the business but stays abstract and simple
+- MODERN: Contemporary design, not cluttered or busy
+- HIGH QUALITY: Sharp, professional, polished look
+
+Think: Instagram-worthy, scroll-stopping visual that makes people LOOK.
+Less is more. Bold and simple beats complex and detailed.`;
     }
 
     private detectServiceBusiness(info: string): boolean {
