@@ -492,6 +492,16 @@ async function loadCommunities() {
     const totalCountEl = document.getElementById('comm-total-count');
     const totalReachEl = document.getElementById('comm-total-reach');
 
+    if (!communitiesList) return;
+
+    // Throttle: Don't fetch if fetched less than 10 seconds ago
+    const now = Date.now();
+    if (window._lastCommunitiesFetch && (now - window._lastCommunitiesFetch < 10000)) {
+        console.log('⏳ Throttling communities fetch (cached)');
+        return;
+    }
+    window._lastCommunitiesFetch = now;
+
     console.log('DOM Elements found:', {
         list: !!communitiesList,
         count: !!totalCountEl,
@@ -1441,6 +1451,7 @@ window.editMiniCampaign = function (id) {
     document.getElementById('mini-product-info').value = campaign.productInfo || '';
     document.getElementById('mini-usp').value = campaign.uniqueSellingPoint || '';
     document.getElementById('mini-voice').value = campaign.brandVoice || 'Professional';
+    document.getElementById('mini-company-link').value = campaign.companyLink || '';
 
     document.getElementById('mini-time-m').value = campaign.morningTime || "07:00";
     document.getElementById('mini-time-a').value = campaign.afternoonTime || "13:00";

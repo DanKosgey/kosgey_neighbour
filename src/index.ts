@@ -537,6 +537,9 @@ app.put('/api/marketing/campaign/:id', async (req, res) => {
     try {
         const { marketingService } = await import('./services/marketing/marketingService');
         const id = parseInt(req.params.id);
+        if (isNaN(id)) {
+            return res.status(400).json({ error: 'Invalid campaign ID' });
+        }
         await marketingService.updateCampaign(id, req.body);
         res.json({ success: true });
     } catch (error) {
@@ -549,6 +552,9 @@ app.delete('/api/marketing/campaign/:id', async (req, res) => {
     try {
         const { marketingService } = await import('./services/marketing/marketingService');
         const id = parseInt(req.params.id);
+        if (isNaN(id)) {
+            return res.status(400).json({ error: 'Invalid campaign ID' });
+        }
         await marketingService.deleteCampaign(id);
         res.json({ success: true });
     } catch (error) {
