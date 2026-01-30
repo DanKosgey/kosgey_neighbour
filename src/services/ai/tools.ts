@@ -286,15 +286,19 @@ export async function executeLocalTool(name: string, args: any, context: any) {
         case 'check_availability':
             try {
                 const { date, duration } = args;
-                console.log(`📅 Checking availability for ${date} (${duration || 'default'} min)`);
-                const slots = await googleCalendar.findAvailableSlots(date, duration);
+
+                // Get timezone from context
+                const userTimezone = context?.userProfile?.timezone || 'UTC';
+
+                console.log(`📅 Checking availability for ${date} (${duration || 'default'} min) in ${userTimezone}`);
+                const slots = await googleCalendar.findAvailableSlots(date, duration, userTimezone);
 
                 if (slots.length === 0 || slots[0].includes('No')) {
                     return { result: slots[0] };
                 }
 
                 return {
-                    result: `Available slots for ${date}:\n${slots.slice(0, 10).join(', ')}${slots.length > 10 ? ` (and ${slots.length - 10} more)` : ''}`
+                    result: `Available slots for ${date} (${userTimezone}):\n${slots.slice(0, 10).join(', ')}${slots.length > 10 ? ` (and ${slots.length - 10} more)` : ''}`
                 };
             } catch (e: any) {
                 console.error('Check availability error:', e);
@@ -308,7 +312,10 @@ export async function executeLocalTool(name: string, args: any, context: any) {
                 // Get customer phone from context if available
                 const customerPhone = context?.contact?.phone;
 
-                console.log(`📅 Scheduling meeting for ${customer_name} on ${date} at ${time}`);
+                // Get timezone from context
+                const userTimezone = context?.userProfile?.timezone || 'UTC';
+
+                console.log(`📅 Scheduling meeting for ${customer_name} on ${date} at ${time} (${userTimezone})`);
 
                 const result = await googleCalendar.createMeeting({
                     date,
@@ -318,7 +325,7 @@ export async function executeLocalTool(name: string, args: any, context: any) {
                     customerEmail: customer_email,
                     purpose,
                     customerPhone
-                });
+                }, userTimezone);
 
                 if (result.success) {
                     return {
