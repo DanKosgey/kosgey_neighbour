@@ -196,7 +196,7 @@ export class AdContentService {
             console.error("Failed to generate ad image:", e);
         }
 
-        return { text: this.formatAdOutput(adCopy), imagePath };
+        return { text: this.formatAdOutput(adCopy, campaign.companyLink), imagePath };
     }
 
     private extractTimeContext(styleHint: string): TimeOfDay {
@@ -329,15 +329,21 @@ export class AdContentService {
 
 
 
-    private formatAdOutput(adJson: any): string {
-        if (typeof adJson === 'string') return adJson;
+    private formatAdOutput(adJson: any, companyLink?: string | null): string {
+        if (typeof adJson === 'string') {
+            // If AI returned plain text, append link at the end
+            if (companyLink) {
+                return `${adJson}\n\n🔗 ${companyLink}`;
+            }
+            return adJson;
+        }
 
         let output = `*${adJson.headline || 'Special Offer'}*\n\n`;
         output += `${adJson.body}\n\n`;
 
         let cta = `👉 ${adJson.cta || 'Reply to learn more!'}`;
-        if (adJson.companyLink) {
-            cta += `\n🔗 ${adJson.companyLink}`;
+        if (companyLink) {
+            cta += `\n🔗 ${companyLink}`;
         }
         output += cta;
         return output;
