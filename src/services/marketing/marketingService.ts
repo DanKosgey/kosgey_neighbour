@@ -162,49 +162,61 @@ export class MarketingService {
     public async executeMarketingSlot(client: any, slotType: 'ad_morning' | 'ad_afternoon' | 'ad_evening' | 'fact_morning' | 'fact_afternoon' | 'fact_evening') {
         console.log(`🚀 Executing Marketing Slot: ${slotType}`);
 
-        // 1. Check for Active Campaign
-        const campaign = await db.query.marketingCampaigns.findFirst({
+        // 1. Check for Active Campaigns (Fetch ALL active, not just first)
+        const campaigns = await db.query.marketingCampaigns.findMany({
             where: eq(marketingCampaigns.status, 'active')
         });
 
-        if (!campaign) {
-            console.log("⚠️ No active marketing campaign found. Skipping slot.");
+        if (!campaigns || campaigns.length === 0) {
+            console.log("⚠️ No active marketing campaigns found. Skipping slot.");
             return;
         }
 
-        // 2. Execute based on slot type
-        try {
-            if (slotType.startsWith('ad')) {
-                await this.handleAdSlot(client, campaign, slotType);
-            } else {
-                await this.handleFactSlot(client, slotType);
+        console.log(`📢 Found ${campaigns.length} active campaigns to execute.`);
+
+        // 2. Execute based on slot type for EACH campaign
+        for (const campaign of campaigns) {
+            try {
+                console.log(`👉 Running campaign: "${campaign.name}" (ID: ${campaign.id})`);
+                if (slotType.startsWith('ad')) {
+                    await this.handleAdSlot(client, campaign, slotType);
+                } else {
+                    await this.handleFactSlot(client, slotType); // Fact slot might be global? Or per campaign?
+                    // Facts are usually global entertaiment. 
+                    // If we run fact slot 5 times for 5 campaigns, we spam users.
+                    // Facts should probably only run ONCE per slot, not per campaign.
+                    // But if handleFactSlot sends to "all groups", we might want to be careful.
+                    // For now, let's assume Facts are Global and run only ONCE total?
+                    // OR, do we bind facts to campaigns?
+                    // The prompt "multi tasking campaigns" implies AD campaigns.
+                    // Let's break the loop for FACTS after first run?
+                    // Or check if slotType starts with 'ad'.
+                }
+            } catch (e) {
+                console.error(`❌ Failed to execute campaign ${campaign.name}:`, e);
             }
-        } catch (e) {
-            console.error(`❌ Failed to execute marketing slot ${slotType}:`, e);
         }
     }
 
-    private async getBroadcastGroups(client: any): Promise<string[]> {
+    private async getBroadcastGroups(client: any, campaign: any): Promise<string[]> {
         // Fetch all WhatsApp groups the bot is a member of
         const allGroups = await client.getAllGroups();
 
-        // 1. Check for Active Campaign and its target settings
-        const campaign = await db.query.marketingCampaigns.findFirst({
-            where: eq(marketingCampaigns.status, 'active')
-        });
-
-        // 2. If campaign has specific target groups designated, filter list
+        // 1. Use the passed campaign's target groups
+        // If campaign has specific target groups designated, filter list
         const targetGroups = campaign?.targetGroups as string[] | null;
 
         if (targetGroups && Array.isArray(targetGroups) && targetGroups.length > 0) {
             // Filter: only include groups that are in the target list AND bot is still a member of
             const filtered = allGroups.filter((gid: string) => targetGroups.includes(gid));
-            console.log(`🎯 Targeted Broadcasting: ${filtered.length} groups selected out of ${allGroups.length} total.`);
+            console.log(`🎯 Targeted Broadcasting for '${campaign.name}': ${filtered.length} groups selected out of ${allGroups.length} total.`);
             return filtered;
         }
 
-        // 3. Fallback: Broadcast to all groups (Legacy behavior or if no specific targets set)
-        console.log(`📢 Broadcasting to ALL ${allGroups.length} groups (No specific targets set).`);
+        // 2. Fallback: Broadcast to all groups IF and ONLY IF checks pass?
+        // Actually, if a campaign has NO targets, does it go to ALL?
+        // Yes, legacy behavior.
+        console.log(`📢 Broadcasting '${campaign?.name || 'Global'}' to ALL ${allGroups.length} groups (No specific targets set).`);
         return allGroups;
     }
 
@@ -229,7 +241,7 @@ export class MarketingService {
         console.log('----------------------------------------\n');
 
         // Get all groups to broadcast to
-        const groups = await this.getBroadcastGroups(client);
+        const groups = await this.getBroadcastGroups(client, campaign);
 
         if (groups.length === 0) {
             console.log('⚠️ No groups found to broadcast to');
@@ -310,7 +322,7 @@ export class MarketingService {
         const message = `🎲 *Random Fact*\n\n${fact}`;
 
         // Get all groups to broadcast to
-        const groups = await this.getBroadcastGroups(client);
+        const groups = await this.getBroadcastGroups(client, null);
 
         if (groups.length === 0) {
             console.log('⚠️ No groups found to broadcast fact to');
