@@ -230,6 +230,9 @@ export const marketingCampaigns = pgTable('marketing_campaigns', {
     afternoonTime: varchar('afternoon_time', { length: 5 }).default('13:00'),
     eveningTime: varchar('evening_time', { length: 5 }).default('19:00'),
 
+    // Target Groups (JSON array of JIDs) - Updated 2026-01-30
+    targetGroups: jsonb('target_groups'),
+
     settings: jsonb('settings'), // Flexible config
     createdAt: timestamp('created_at').defaultNow(),
 });

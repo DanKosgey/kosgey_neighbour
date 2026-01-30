@@ -10,14 +10,22 @@ export const usePostgresAuthState = async (collectionName: string): Promise<{ st
 
         // Use withRetry for resilience
         await withRetry(async () => {
-            // Use PostgreSQL UPSERT (INSERT ... ON CONFLICT) for efficiency
-            await db.insert(authCredentials)
-                .values({ key, value })
-                .onConflictDoUpdate({
-                    target: authCredentials.key,
-                    set: { value }
-                });
-        }, 3, 1000); // 3 retries (was 2)
+            // Enforce 5s timeout to prevent hanging on bad connections
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('DB Write Timeout (5s)')), 5000)
+            );
+
+            // Use PostgreSQL UPSERT (INSERT ... ON CONFLICT)
+            await Promise.race([
+                db.insert(authCredentials)
+                    .values({ key, value })
+                    .onConflictDoUpdate({
+                        target: authCredentials.key,
+                        set: { value }
+                    }),
+                timeoutPromise
+            ]);
+        }, 3, 1000); // 3 retries
     };
 
     const readData = async (id: string) => {

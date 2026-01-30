@@ -1239,6 +1239,7 @@ async function createCampaign() {
 async function refreshGroups() {
     const btn = document.getElementById('refresh-groups-btn');
     const groupsList = document.getElementById('groups-list');
+    const saveBtn = document.getElementById('save-groups-btn');
 
     btn.textContent = '⏳ Loading...';
     btn.disabled = true;
@@ -1250,13 +1251,24 @@ async function refreshGroups() {
         if (result.success && result.groups) {
             if (result.groups.length === 0) {
                 groupsList.innerHTML = '<p style="color: #6b7280; text-align: center;">No groups found. Add the bot to WhatsApp groups first.</p>';
+                saveBtn.style.display = 'none';
             } else {
+                saveBtn.style.display = 'block';
                 groupsList.innerHTML = result.groups.map((group, index) => `
                     <div style="padding: 0.75rem; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center;">
-                        <div>
-                            <strong style="color: var(--text-primary);">${group.name || 'Unknown Group'}</strong>
-                            <br>
-                            <small style="color: #6b7280;">${group.id}</small>
+                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                            <input type="checkbox" class="group-select-checkbox" 
+                                value="${group.id}" 
+                                id="group-${index}"
+                                ${group.selected ? 'checked' : ''}
+                                style="width: 1.25rem; height: 1.25rem; cursor: pointer;">
+                            <div>
+                                <label for="group-${index}" style="cursor: pointer;">
+                                    <strong style="color: var(--text-primary);">${group.name || 'Unknown Group'}</strong>
+                                </label>
+                                <br>
+                                <small style="color: #6b7280;">${group.id}</small>
+                            </div>
                         </div>
                         <div style="text-align: right;">
                             <span style="background: #10b981; color: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">
@@ -1274,6 +1286,45 @@ async function refreshGroups() {
         groupsList.innerHTML = `<p style="color: #ef4444; text-align: center;">Error: ${error.message}</p>`;
     } finally {
         btn.textContent = '🔄 Refresh Groups';
+        btn.disabled = false;
+    }
+}
+
+// Save Group Selection
+async function saveGroupSelection() {
+    const btn = document.getElementById('save-groups-btn');
+    const checkboxes = document.querySelectorAll('.group-select-checkbox:checked');
+    const selectedGroups = Array.from(checkboxes).map(cb => cb.value);
+
+    // If no groups selected, warn user (or allow clearing?)
+    // Let's allow clearing (selecting none pauses broadcasting effectively)
+
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/marketing/campaign/targets`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetGroups: selectedGroups })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            btn.textContent = 'Saved ✓';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }, 2000);
+        } else {
+            throw new Error(result.error || 'Failed to save selection');
+        }
+    } catch (error) {
+        console.error('Failed to save groups:', error);
+        alert('Error saving selection: ' + error.message);
+        btn.textContent = originalText;
         btn.disabled = false;
     }
 }

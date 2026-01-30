@@ -772,12 +772,43 @@ export class WhatsAppClient {
    * Useful for scheduled tasks and external triggers.
    */
   public async sendText(jid: string, text: string): Promise<void> {
-    if (this.messageSender) {
-      await this.messageSender.sendText(jid, text);
-    } else if (this.sock) {
-      await this.sock.sendMessage(jid, { text });
+    // Bypass MessageSender ("typing..." simulation) for direct API reliability
+    // attempts to reduce hangs during broadcasts
+    if (this.sock) {
+      try {
+        await this.sock.sendMessage(jid, { text });
+      } catch (error) {
+        console.error(`❌ Error sending text to ${jid}:`, error);
+      }
     } else {
       console.warn('⚠️ Cannot send message: Client not initialized');
+    }
+  }
+
+  public async sendImage(jid: string, image: Buffer, caption?: string): Promise<void> {
+    if (this.sock) {
+      console.log(`📤 Sending image to ${jid} (${image.length} bytes)...`);
+      try {
+        // Race with timeout to prevent hanging (increased to 30s)
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Send image timeout (30s)')), 30000)
+        );
+
+        await Promise.race([
+          this.sock.sendMessage(jid, {
+            image,
+            caption,
+            mimetype: 'image/jpeg'
+          }),
+          timeoutPromise
+        ]);
+        console.log(`✅ Image sent to ${jid}`);
+      } catch (error) {
+        console.error(`❌ Error sending image to ${jid}:`, error);
+        throw error;
+      }
+    } else {
+      console.warn('⚠️ Cannot send image: Client not initialized');
     }
   }
 

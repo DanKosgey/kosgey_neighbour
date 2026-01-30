@@ -144,7 +144,26 @@ export class MarketingService {
 
     private async getBroadcastGroups(client: any): Promise<string[]> {
         // Fetch all WhatsApp groups the bot is a member of
-        return await client.getAllGroups();
+        const allGroups = await client.getAllGroups();
+
+        // 1. Check for Active Campaign and its target settings
+        const campaign = await db.query.marketingCampaigns.findFirst({
+            where: eq(marketingCampaigns.status, 'active')
+        });
+
+        // 2. If campaign has specific target groups designated, filter list
+        const targetGroups = campaign?.targetGroups as string[] | null;
+
+        if (targetGroups && Array.isArray(targetGroups) && targetGroups.length > 0) {
+            // Filter: only include groups that are in the target list AND bot is still a member of
+            const filtered = allGroups.filter((gid: string) => targetGroups.includes(gid));
+            console.log(`🎯 Targeted Broadcasting: ${filtered.length} groups selected out of ${allGroups.length} total.`);
+            return filtered;
+        }
+
+        // 3. Fallback: Broadcast to all groups (Legacy behavior or if no specific targets set)
+        console.log(`📢 Broadcasting to ALL ${allGroups.length} groups (No specific targets set).`);
+        return allGroups;
     }
 
     private async handleAdSlot(client: any, campaign: any, slot: string) {
@@ -156,7 +175,16 @@ export class MarketingService {
         else if (slot.includes('afternoon')) style = 'practical, solution-focused';
         else if (slot.includes('evening')) style = 'relaxed, aspirational, cozy';
 
+        // Check if forced text-only mode
+        const forceTextOnly = process.env.FORCE_TEXT_ONLY_ADS === 'true';
+
         const ad = await adContentService.generateAd(campaign.id, style);
+
+        // LOG CONTENT FOR USER VERIFICATION
+        console.log('\n📜 [GENERATED AD CONTENT]:');
+        console.log('----------------------------------------');
+        console.log(ad.text);
+        console.log('----------------------------------------\n');
 
         // Get all groups to broadcast to
         const groups = await this.getBroadcastGroups(client);
@@ -167,25 +195,51 @@ export class MarketingService {
         }
 
         console.log(`📢 Broadcasting ad to ${groups.length} groups...`);
+        if (forceTextOnly) {
+            console.log('📝 Text-only mode enabled');
+        }
 
         // Send to each group with delay
         for (const groupJid of groups) {
             try {
-                if (ad.imagePath) {
-                    const fs = require('fs');
-                    const buffer = fs.readFileSync(ad.imagePath);
-                    await client.sendImage(groupJid, buffer, ad.text);
-                } else {
-                    await client.sendText(groupJid, ad.text);
-                }
-                console.log(`✅ Sent to group: ${groupJid}`);
+                if (ad.imagePath && !forceTextOnly) {
+                    console.log(`📸 Sending image ad to ${groupJid}...`);
+                    try {
+                        const fs = require('fs');
+                        const buffer = fs.readFileSync(ad.imagePath);
 
-                // 2-second delay between groups to avoid spam detection
+                        // Increased timeout and retry logic
+                        let sent = false;
+                        for (let attempt = 1; attempt <= 2; attempt++) {
+                            try {
+                                await client.sendImage(groupJid, buffer, `[TEST MODE - AUTONOMOUS AGENT]\n\n${ad.text}`);
+                                console.log(`✅ Image ad sent to ${groupJid}`);
+                                sent = true;
+                                break;
+                            } catch (imgError: any) {
+                                if (attempt === 2) throw imgError;
+                                console.log(`⚠️ Retry ${attempt}/2 for ${groupJid}...`);
+                                await new Promise(resolve => setTimeout(resolve, 3000));
+                            }
+                        }
+                    } catch (imgError) {
+                        console.error(`⚠️ Failed to send image to ${groupJid}, falling back to text:`, imgError);
+                        await client.sendText(groupJid, `[TEST MODE - AUTONOMOUS AGENT]\n\n(Image upload failed)\n\n${ad.text}`);
+                        console.log(`✅ Fallback text ad sent to ${groupJid}`);
+                    }
+                } else {
+                    console.log(`📝 Sending text ad to ${groupJid}...`);
+                    await client.sendText(groupJid, `[TEST MODE - AUTONOMOUS AGENT]\n\n${ad.text}`);
+                    console.log(`✅ Text ad sent to ${groupJid}`);
+                }
+
+                // Increased delay between groups for reliability
                 if (groups.indexOf(groupJid) < groups.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    await new Promise(resolve => setTimeout(resolve, 3000)); // 3 seconds
                 }
             } catch (error) {
                 console.error(`❌ Failed to send to group ${groupJid}:`, error);
+                // Continue to next group instead of failing completely
             }
         }
 
@@ -194,8 +248,9 @@ export class MarketingService {
             const fs = require('fs');
             try {
                 fs.unlinkSync(ad.imagePath);
+                console.log('🗑️ Cleaned up temporary image file');
             } catch (e) {
-                console.error('Failed to cleanup image:', e);
+                console.error('⚠️ Failed to cleanup image:', e);
             }
         }
     }
