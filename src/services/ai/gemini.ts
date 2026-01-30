@@ -28,6 +28,7 @@ interface UserProfile {
   availability?: string;
   backgroundInfo?: string;
   communicationPreferences?: string;
+  timezone?: string;
 }
 
 interface GeminiResponse {
@@ -303,6 +304,13 @@ export class GeminiService {
     if (userProfile) {
       systemPrompt = this._appendUserProfile(systemPrompt, userProfile);
     }
+
+    // Inject Current Time Context (CRITICAL for correct greetings and relative time)
+    const timezone = userProfile?.timezone || 'UTC';
+    const now = new Date();
+    const timeString = now.toLocaleString('en-US', { timeZone: timezone, hour12: true });
+    const dayString = now.toLocaleDateString('en-US', { timeZone: timezone, weekday: 'long' });
+    systemPrompt += `\n\nCURRENT DATE/TIME: ${dayString}, ${timeString} (${timezone})`;
 
     // Apply response length constraint
     if (aiProfile?.responseLength === 'short') {
