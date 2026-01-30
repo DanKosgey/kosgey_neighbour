@@ -9,6 +9,10 @@ export class MarketingService {
     // In production, this should be in the DB (conversations table) or Redis.
     private onboardingSessions: Map<string, { step: number, data: any }> = new Map();
 
+    // Global Cooldown Map to prevent double-posting to the same group (e.g. from multiple campaigns triggering at once)
+    private lastGroupPostTime: Map<string, number> = new Map();
+    private readonly GROUP_COOLDOWN_MS = 15 * 60 * 1000; // 15 Minutes
+
     private constructor() { }
 
     public static getInstance(): MarketingService {
@@ -123,6 +127,13 @@ export class MarketingService {
             throw new Error(`A campaign with the name '${name}' already exists. Please choose a different name.`);
         }
 
+        if (existingCampaign) {
+            throw new Error(`A campaign with the name '${name}' already exists. Please choose a different name.`);
+        }
+
+        // Validate Schedule (Anti-Spam Rule: 15 min gap)
+        await this.validateScheduleConflicts(morningTime, afternoonTime, eveningTime);
+
         // Create Campaign Entry
         const [campaign] = await db.insert(marketingCampaigns).values({
             name,
@@ -172,6 +183,22 @@ export class MarketingService {
             }
         }
 
+        // If times are being updated, validate them against conflicts
+        if (updates.morningTime || updates.afternoonTime || updates.eveningTime) {
+            const current = await db.query.marketingCampaigns.findFirst({
+                where: eq(marketingCampaigns.id, id)
+            });
+
+            if (current) {
+                await this.validateScheduleConflicts(
+                    updates.morningTime || current.morningTime || undefined,
+                    updates.afternoonTime || current.afternoonTime || undefined,
+                    updates.eveningTime || current.eveningTime || undefined,
+                    id
+                );
+            }
+        }
+
         await db.update(marketingCampaigns)
             .set(updates)
             .where(eq(marketingCampaigns.id, id));
@@ -185,6 +212,55 @@ export class MarketingService {
             .where(eq(marketingCampaigns.id, id));
     }
 
+
+
+    /**
+     * Prevents spam by ensuring campaigns are at least 15 minutes apart
+     */
+    private async validateScheduleConflicts(
+        newMorning: string | undefined,
+        newAfternoon: string | undefined,
+        newEvening: string | undefined,
+        excludeId?: number
+    ) {
+        // Fetch all active/paused campaigns
+        const existingCampaigns = await db.query.marketingCampaigns.findMany({
+            where: (campaigns, { ne, and, or, eq }) => and(
+                or(eq(campaigns.status, 'active'), eq(campaigns.status, 'paused')),
+                excludeId ? ne(campaigns.id, excludeId) : undefined
+            )
+        });
+
+        const timeToMinutes = (timeStr: string) => {
+            const [h, m] = timeStr.split(':').map(Number);
+            return h * 60 + m;
+        };
+
+        const checkConflict = (newTime: string | undefined, slotName: string) => {
+            if (!newTime) return;
+            const newMin = timeToMinutes(newTime);
+
+            for (const c of existingCampaigns) {
+                // Check against ALL slots of other campaigns to ensure global separation
+                const check = (existingTime: string | null, existingSlot: string) => {
+                    if (!existingTime) return;
+                    const existingMin = timeToMinutes(existingTime);
+                    const diff = Math.abs(newMin - existingMin);
+                    if (diff < 15) {
+                        throw new Error(`⏳ Schedule Conflict: Your ${slotName} time (${newTime}) is too close to '${c.name}'s ${existingSlot} time (${existingTime}).\n\nTo prevent spam, please ensure a minimum 15-minute gap between all campaign activities.`);
+                    }
+                };
+
+                check(c.morningTime, 'Morning');
+                check(c.afternoonTime, 'Afternoon');
+                check(c.eveningTime, 'Evening');
+            }
+        };
+
+        checkConflict(newMorning, 'Morning');
+        checkConflict(newAfternoon, 'Afternoon');
+        checkConflict(newEvening, 'Evening');
+    }
 
     /**
      * Execute a specific marketing slot for a SINGLE campaign
@@ -220,9 +296,40 @@ export class MarketingService {
             return;
         }
 
-        console.log(`📢 Found ${campaigns.length} active campaigns to execute.`);
+        console.log(`📢 Found ${campaigns.length} active campaigns.`);
 
-        // 2. Execute based on slot type for EACH campaign
+        // 2. MANUAL OVERRIDE: If custom instructions exist, run ONCE with merged audience
+        if (customInstructions) {
+            console.log(`✨ Manual Post Detected ('${customInstructions.substring(0, 20)}...'). Merging audiences to prevent duplicates.`);
+
+            // A. Aggregate Target Groups
+            const uniqueTargetIds = new Set<string>();
+            let targetsAll = false;
+
+            for (const c of campaigns) {
+                const targets = c.targetGroups as string[] | null;
+                if (!targets || targets.length === 0) {
+                    targetsAll = true; // One campaign targets ALL, so the manual post should target ALL
+                    break;
+                }
+                targets.forEach(t => uniqueTargetIds.add(t));
+            }
+
+            // B. Construct 'Merged' Campaign
+            // Use the first campaign as a template for other props, but override targets
+            const mergedCampaign = {
+                ...campaigns[0],
+                name: "Manual Broadcast (Merged)",
+                targetGroups: targetsAll ? [] : Array.from(uniqueTargetIds) // Empty array triggers "ALL" logic in getBroadcastGroups
+            };
+
+            // C. Execute Once
+            await this.executeSingleCampaignSlot(client, mergedCampaign, slotType, customInstructions);
+            return;
+        }
+
+        // 3. STANDARD SCHEDULE: Execute based on slot type for EACH campaign
+        console.log(`🗓️ Scheduled Run: Executing ${campaigns.length} campaigns individually.`);
         const executions = campaigns.map(async (campaign) => {
             await this.executeSingleCampaignSlot(client, campaign, slotType, customInstructions);
         });
@@ -288,7 +395,18 @@ export class MarketingService {
 
         // Send to each group with delay
         for (const groupJid of groups) {
+            // GLOBAL COOLDOWN CHECK
+            const lastPost = this.lastGroupPostTime.get(groupJid) || 0;
+            const now = Date.now();
+            if (now - lastPost < this.GROUP_COOLDOWN_MS) {
+                console.log(`⏳ Skipping Group ${groupJid} (Cooldown active). Last post was ${(now - lastPost) / 1000}s ago.`);
+                continue;
+            }
+
             try {
+                // Update Timestamp immediately to block other concurrent campaigns
+                this.lastGroupPostTime.set(groupJid, now);
+
                 if (ad.imagePath && !forceTextOnly) {
                     console.log(`📸 Sending image ad to ${groupJid}...`);
                     try {

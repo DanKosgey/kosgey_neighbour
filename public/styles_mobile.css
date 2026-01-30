@@ -1,0 +1,203 @@
+/* =========================================
+   MOBILE RESPONSIVENESS
+   ========================================= */
+
+/* Mobile Navigation Bar */
+.mobile-nav {
+    display: none;
+    /* Hidden on desktop */
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    z-index: 2000;
+    /* Highest priority */
+    padding: 0 0.5rem;
+    overflow-x: auto;
+    /* Scrollable horizontally */
+    -webkit-overflow-scrolling: touch;
+    gap: 0.5rem;
+    align-items: center;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.mobile-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 65px;
+    /* Ensure touch target size */
+    flex: 1;
+    /* Distribute space */
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.7rem;
+    gap: 4px;
+    padding: 8px 0;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.mobile-nav-item.active {
+    color: var(--primary);
+}
+
+.mobile-nav-item .nav-icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+.mobile-nav-item.active .nav-icon {
+    transform: translateY(-2px);
+    filter: drop-shadow(0 4px 6px rgba(168, 85, 247, 0.4));
+}
+
+/* Badge for mobile */
+.mobile-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: var(--secondary);
+    color: white;
+    font-size: 10px;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--bg-primary);
+}
+
+.nav-icon {
+    position: relative;
+}
+
+
+/* Media Queries */
+@media (max-width: 768px) {
+
+    /* Layout Adjustments */
+    .app-container {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        display: none;
+        /* Hide Desktop Sidebar */
+    }
+
+    .mobile-nav {
+        display: flex;
+        /* Show Mobile Nav */
+    }
+
+    .main-content {
+        padding-bottom: 80px;
+        /* Space for bottom nav */
+        width: 100%;
+    }
+
+    .page {
+        padding: 1rem;
+        /* Reduce padding */
+    }
+
+    /* Chats Responsive */
+    .chats-container {
+        grid-template-columns: 1fr;
+        height: calc(100vh - 140px);
+        /* Adjust for header + nav */
+    }
+
+    /* On mobile, usually we hide one pane. For now, let's just stack 
+       and rely on JS to toggle visibility if we want true app behavior.
+       But user asked for "page by page responsiveness". 
+       Stacking is the simplest responsive fix without major JS rewrite. */
+    .chat-list {
+        display: block;
+        /* Typically showing list first */
+        height: 40vh;
+        /* Split screen if simple stacking */
+    }
+
+    .chat-detail {
+        display: block;
+        height: 50vh;
+    }
+
+    /* Better Mobile Chat: Toggle classes (assumes JS logic exists or added later) 
+       If we don't have JS toggles, splitting height is a safe fallback.
+    */
+
+
+    /* Marketing Page Mobile Overrides */
+    #marketing-page {
+        padding-bottom: 80px !important;
+        /* Space for nav */
+        z-index: 100 !important;
+        /* Below mobile nav (2000) */
+    }
+
+    .marketing-sidebar {
+        display: none;
+        /* Hide marketing specific sidebar */
+    }
+
+    .marketing-main-content {
+        padding: 1rem;
+        width: 100%;
+    }
+
+    .marketing-header-top {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .marketing-stats-grid {
+        grid-template-columns: 1fr;
+        /* Stack stats */
+    }
+
+    /* Wizard Steps */
+    .marketing-step-indicator {
+        overflow-x: auto;
+        padding-bottom: 1rem;
+        justify-content: flex-start;
+        gap: 1rem;
+    }
+
+    .marketing-step {
+        min-width: 80px;
+    }
+
+    /* Table/List Responsiveness */
+    .marketing-campaign-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .marketing-campaign-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    /* Modals */
+    .marketing-modal {
+        width: 95%;
+        max-height: 80vh;
+    }
+}

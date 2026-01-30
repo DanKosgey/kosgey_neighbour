@@ -2351,64 +2351,41 @@ textarea::placeholder {
 
 /* Marketing Page Root Variables */
 #marketing-page {
-    --bg-dark: #0a0e1a;
-    --bg-card: #151b2e;
-    --bg-input: #1a2236;
+    /* Map to Global Theme Variables */
+    --bg-dark: var(--bg-primary);
+    --bg-card: var(--glass-bg);
+    --bg-input: rgba(255, 255, 255, 0.05);
+    /* Generic transparent for both themes */
+
+    /* Keep distinctive marketing accents */
     --accent-primary: #ff6b9d;
     --accent-secondary: #ffd93d;
     --accent-tertiary: #6bcf7f;
-    --text-primary: #ffffff;
-    --text-secondary: #8b92b2;
-    --border-color: #252d45;
+
+    --text-primary: var(--text-primary);
+    --text-secondary: var(--text-secondary);
+    --border-color: var(--border);
     --shadow-glow: rgba(255, 107, 157, 0.2);
 }
 
+/* Light Mode Specific Overrides for Accents if needed */
+[data-theme="light"] #marketing-page {
+    --bg-input: rgba(0, 0, 0, 0.05);
+    --shadow-glow: rgba(255, 107, 157, 0.4);
+}
+
 /* Marketing Page Container */
+/* Marketing Page Container - Integrated into Main Layout */
 #marketing-page {
     font-family: 'DM Sans', sans-serif;
-    background: var(--bg-dark);
     color: var(--text-primary);
-
-    /* Full screen overlay to hide main app sidebar */
-    position: fixed !important;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 100;
-
-    margin: 0 !important;
-    padding: 0 !important;
-    max-width: none !important;
-    overflow-y: auto;
-    overflow-x: hidden;
-}
-
-/* Animated gradient background */
-.marketing-animated-bg {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
+    /* Removed fixed positioning to allow standard app layout */
     height: 100%;
-    background: var(--bg-dark);
-    z-index: 0;
-    overflow: hidden;
 }
 
-.marketing-animated-bg::before {
-    content: '';
-    position: fixed;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background:
-        radial-gradient(circle at 20% 80%, rgba(255, 107, 157, 0.08) 0%, transparent 50%),
-        radial-gradient(circle at 80% 20%, rgba(107, 207, 127, 0.06) 0%, transparent 50%),
-        radial-gradient(circle at 40% 40%, rgba(255, 217, 61, 0.04) 0%, transparent 50%);
-    animation: drift 20s ease-in-out infinite;
-    z-index: 0;
+/* Hide marketing-specific background in favor of global app background */
+.marketing-animated-bg {
+    display: none;
 }
 
 @keyframes drift {
@@ -2462,24 +2439,16 @@ textarea::placeholder {
 }
 
 .marketing-app-container {
-    display: flex;
-    min-height: 100vh;
+    display: block;
+    /* Was flex, but we don't need the sidebar anymore */
+    min-height: auto;
     position: relative;
     z-index: 1;
 }
 
-/* Marketing Sidebar */
+/* Marketing Sidebar - Hidden as we use global sidebar now */
 .marketing-sidebar {
-    width: 280px;
-    background: rgba(21, 27, 46, 0.6);
-    backdrop-filter: blur(20px);
-    border-right: 1px solid var(--border-color);
-    padding: 2rem 0;
-    display: flex;
-    flex-direction: column;
-    position: sticky;
-    top: 0;
-    height: 100vh;
+    display: none !important;
 }
 
 .marketing-brand {
@@ -2590,15 +2559,17 @@ textarea::placeholder {
     animation: pulse 2s ease-in-out infinite;
 }
 
-/* Main Content */
+/* Main Content - Simplified for integration */
 .marketing-main-content {
     flex: 1;
-    padding: 2rem 3rem;
-    max-width: 1400px;
+    padding: 0;
+    /* Parent .page handles padding */
+    width: 100%;
+    max-width: 100%;
 }
 
 .marketing-header {
-    margin-bottom: 3rem;
+    margin-bottom: 2rem;
     animation: slideDown 0.6s ease-out;
 }
 
@@ -2625,10 +2596,11 @@ textarea::placeholder {
     font-family: 'Fraunces', serif;
     font-size: 2.5rem;
     font-weight: 900;
-    background: linear-gradient(135deg, #ffffff, #8b92b2);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--text-primary);
+    /* Use standard text color */
+    /* Optional: Subtle gradient that works on both or just standard color */
+    background: none;
+    -webkit-text-fill-color: initial;
 }
 
 .marketing-header-subtitle {
@@ -2679,7 +2651,7 @@ textarea::placeholder {
 }
 
 .marketing-stat-card {
-    background: rgba(21, 27, 46, 0.6);
+    background: var(--glass-bg);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border-color);
     border-radius: 16px;
@@ -2744,10 +2716,9 @@ textarea::placeholder {
     font-weight: 700;
     font-family: 'Fraunces', serif;
     line-height: 1;
-    background: linear-gradient(135deg, #ffffff, var(--accent-primary));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--text-primary);
+    background: none;
+    -webkit-text-fill-color: initial;
 }
 
 .marketing-stat-trend {
@@ -2773,7 +2744,7 @@ textarea::placeholder {
 }
 
 .marketing-campaign-item {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--glass-bg);
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 1.25rem;
@@ -2877,7 +2848,7 @@ textarea::placeholder {
 }
 
 .marketing-card {
-    background: rgba(21, 27, 46, 0.6);
+    background: var(--glass-bg);
     backdrop-filter: blur(20px);
     border: 1px solid var(--border-color);
     border-radius: 16px;
@@ -3221,7 +3192,7 @@ textarea::placeholder {
 }
 
 .marketing-list-item {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--glass-bg);
     border: 1px solid var(--border-color);
     border-radius: 10px;
     padding: 1rem;

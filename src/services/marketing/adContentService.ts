@@ -169,7 +169,7 @@ export class AdContentService {
         const timeContext = this.extractTimeContext(styleHint);
 
         // 5. Generate Copy (with framework)
-        const adCopy = await this.generateAdCopy(profile, style, timeContext, framework, customInstructions);
+        const adCopy = await this.generateAdCopy(profile, style, timeContext, framework, customInstructions, campaign.name);
 
         // 6. Generate Image
         // visual scenario engine
@@ -220,23 +220,27 @@ export class AdContentService {
      */
     private getRandomCreativeAngle(): { persona: string, angle: string } {
         const angles = [
-            { persona: " The Storyteller", angle: "Start with a micro-story or scenario. Focus on the 'before' state." },
+            { persona: "The Storyteller", angle: "Start with a micro-story or scenario. Focus on the 'before' state." },
             { persona: "The Best Friend", angle: "Casual, intimate, strictly 1-on-1 tone. candid advice." },
             { persona: "The Provocateur", angle: "Start with a controversial or surprising statement. Challenge a common belief." },
             { persona: "The Minimalist", angle: "Extremely punchy, short sentences. Focus effectively on the Result only." },
             { persona: "The Insider", angle: "Use 'Behind the scenes' or 'Secret' framing. Make them feel part of an exclusive club." },
             { persona: "The Analyst", angle: "Focus on logic, numbers, and efficiency. 'Why waste X when you can Y?'" },
             { persona: "The Visionary", angle: "Focus on the 'Dream Outcome'. Paint a vivid picture of the future self." },
-            { persona: "The Urgent Messenger", angle: "Strictly focus on 'Why Now'. Create immediate but authentic scarcity." }
+            { persona: "The Urgent Messenger", angle: "Strictly focus on 'Why Now'. Create immediate but authentic scarcity." },
+            { persona: "The Artisan", angle: "Focus on craftsmanship, materials, and intricate details. Appreciation of quality." },
+            { persona: "The Coach", angle: "Empowering, encouraging, and instructional. 'You can do this, here is how'." },
+            { persona: "The Skeptic turned Believer", angle: "Start with doubt ('I was unsure if...'), then reveal the convincing proof." }
         ];
         return angles[Math.floor(Math.random() * angles.length)];
     }
 
-    private async generateAdCopy(profile: any, style: VisualStyle, timeContext: TimeOfDay, framework: PitchFramework, customInstructions?: string): Promise<any> {
+    private async generateAdCopy(profile: any, style: VisualStyle, timeContext: TimeOfDay, framework: PitchFramework, customInstructions?: string, campaignName?: string): Promise<any> {
         const shopContext = `Brand: ${profile.productInfo}, Industry: ${profile.targetAudience}. USP: ${profile.uniqueSellingPoint}. Voice: ${profile.brandVoice}`;
 
         const frameworkInstructions = this.getFrameworkInstructions(framework);
         const { persona, angle } = this.getRandomCreativeAngle();
+        const campContext = campaignName ? `Campaign Theme: "${campaignName}"` : "";
 
         let instructionBlock = "";
         if (customInstructions) {
@@ -251,9 +255,10 @@ export class AdContentService {
         const prompt = `You are a World-Class Copywriter adopting the persona of '${persona}'. ${shopContext}
         
         Generate a WhatsApp ad variant for:
-        Product: ${profile.productInfo}
+        Product/Focus: ${profile.productInfo}
         Audience: ${profile.targetAudience}
         Tone: ${profile.brandVoice}
+        ${campContext}
         Time Context: ${timeContext} (${this.timeInfluence[timeContext]})
         Style: ${style}
         Framework: ${framework}
@@ -265,6 +270,7 @@ export class AdContentService {
         ${instructionBlock}
  
         Guidelines:
+        - 🎯 PRODUCT ISOLATION: Focus strictly on the 'Product/Focus' described above. Do not mix with generic brand info unless relevant. Treat this as a unique campaign.
         - 🛑 DO NOT start with "Are you..." or "Do you...". This is banned.
         - 🛑 DO NOT use the phrase "Unlock your potential" or "Elevate your business".
         - Start with a Hook that fits the '${persona}' persona.
