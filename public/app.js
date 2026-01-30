@@ -1448,11 +1448,20 @@ window.editCampaign = function (id) {
 window.deleteCampaign = async function (id) {
     if (!confirm('Are you sure you want to delete this campaign?')) return;
 
+    console.log('Attempting to delete campaign:', id);
     try {
-        await fetch(`${API_BASE}/api/marketing/campaign/${id}`, { method: 'DELETE' });
-        if (window.refreshCampaigns) refreshCampaigns();
+        const response = await fetch(`${API_BASE}/api/marketing/campaign/${id}`, { method: 'DELETE' });
+        const result = await response.json();
+
+        if (result.success) {
+            console.log('Campaign deleted successfully');
+            if (window.refreshCampaigns) refreshCampaigns();
+        } else {
+            throw new Error(result.error || 'Deletion failed');
+        }
     } catch (e) {
-        alert('Failed to delete: ' + e.message);
+        console.error('Delete failed:', e);
+        alert('Failed to delete campaign: ' + e.message);
     }
 }
 
