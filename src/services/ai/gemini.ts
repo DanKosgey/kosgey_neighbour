@@ -311,7 +311,7 @@ export class GeminiService {
     const timeString = now.toLocaleString('en-US', { timeZone: timezone, hour12: true });
     const dayString = now.toLocaleDateString('en-US', { timeZone: timezone, weekday: 'long' });
 
-    systemPrompt += `\n\n=== TEMPORAL CONTEXT ===\nCURRENT DATE/TIME: ${dayString}, ${timeString} (${timezone})\nINSTRUCTION: You MUST use this time to determine the appropriate greeting (Good Morning/Afternoon/Evening). Do not blindly repeat the user's greeting if it is temporally incorrect.`;
+    systemPrompt += `\n\n=== TEMPORAL CONTEXT ===\nCURRENT DATE/TIME: ${dayString}, ${timeString} (${timezone})\nINSTRUCTION: You are aware of the current time. If you CHOOSE to greet, ensure it matches the time of day. However, DO NOT greet in every message. If the conversation is ongoing or the query is direct, reply directly without a greeting.`;
 
     // Apply response length constraint
     if (aiProfile?.responseLength === 'short') {
