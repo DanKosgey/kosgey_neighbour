@@ -14,7 +14,12 @@ app.use(cors());
 app.use(express.json());
 
 // Serve static files from public directory
+// Serve static files from public directory
 app.use(express.static(path.join(__dirname, '../public')));
+
+// Run Migrations
+import { runMigrations } from './database/migrate';
+runMigrations().catch(console.error);
 
 // Initialize Clients
 const whatsappClient = new WhatsAppClient();

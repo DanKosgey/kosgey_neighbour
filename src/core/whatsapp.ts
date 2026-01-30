@@ -662,9 +662,9 @@ export class WhatsAppClient {
     console.log(`📤 Sending image to ${jid} (${image.length} bytes)...`);
 
     try {
-      // Shorter timeout and simpler approach
+      // Increased timeout for reliability
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Send image timeout (30s)')), 30000)
+        setTimeout(() => reject(new Error('Send image timeout (120s)')), 120000)
       );
 
       await Promise.race([
