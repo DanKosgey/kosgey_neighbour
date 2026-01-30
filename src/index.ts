@@ -493,12 +493,12 @@ app.get('/api/marketing/groups', async (req, res) => {
             where: eq(marketingCampaigns.status, 'active')
         });
 
-        const selectedGroups = activeCampaign?.targetGroups as string[] || [];
+        const selectedGroups = (activeCampaign?.targetGroups as any as string[]) || [];
         // If no targetGroups defined (legacy), defaulting to ALL being selected is safer logic-wise for now, 
         // OR we can make the UI handle it. 
         // Let's assume: empty targetGroups = broadcast to all (legacy behavior) 
         // BUT for UI, if it's null, we might want to check all by default.
-        const isLegacy = !activeCampaign?.targetGroups;
+        const isLegacy = !(activeCampaign?.targetGroups as any);
 
         // Fetch group metadata for each group
         const groups = await Promise.all(groupJids.map(async (jid: string) => {
@@ -546,7 +546,7 @@ app.put('/api/marketing/campaign/targets', async (req, res) => {
         }
 
         await db.update(marketingCampaigns)
-            .set({ targetGroups })
+            .set({ targetGroups: targetGroups as any }) // Cast targetGroups to any for jsonb field
             .where(eq(marketingCampaigns.id, activeCampaign.id));
 
         res.json({ success: true, message: 'Target groups updated' });
