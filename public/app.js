@@ -1638,7 +1638,16 @@ async function loadModalGroups() {
 
             const currentTargets = window.currentEditingTargets || [];
 
-            list.innerHTML = result.groups.map(g => {
+            // Add Select All Button Container
+            let html = `
+                <div style="grid-column: 1 / -1; display: flex; justify-content: flex-end; padding-bottom: 0.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid var(--border);">
+                    <button type="button" class="marketing-btn-secondary" style="padding: 0.25rem 0.75rem; font-size: 0.8rem;" onclick="toggleAllGroups(this)" data-state="none">
+                        Select All
+                    </button>
+                </div>
+            `;
+
+            html += result.groups.map(g => {
                 // Robust check for ID (handle string vs number)
                 const isSelected = currentTargets.some(id => String(id) === String(g.id));
                 const selectedClass = isSelected ? 'selected' : '';
@@ -1656,6 +1665,8 @@ async function loadModalGroups() {
                 </div>
             `}).join('');
 
+            list.innerHTML = html;
+
             list.dataset.loaded = 'true';
             updateReviewSummary(); // Update summary immediately after load
         }
@@ -1663,6 +1674,34 @@ async function loadModalGroups() {
         list.innerHTML = '<p class="empty-text">Error loading groups.</p>';
     }
 }
+
+// Add the toggleAllGroups function
+window.toggleAllGroups = function (btn) {
+    const list = document.getElementById('modal-audience-list');
+    const items = list.querySelectorAll('.marketing-list-item');
+    const currentState = btn.dataset.state;
+    // If current state is 'all', we want to deselect (false). If 'none', select (true).
+    const newState = currentState !== 'all';
+
+    items.forEach(item => {
+        const checkbox = item.querySelector('.group-checkbox');
+        if (checkbox) {
+            checkbox.checked = newState;
+            if (newState) {
+                item.classList.add('selected');
+            } else {
+                item.classList.remove('selected');
+            }
+        }
+    });
+
+    // Update button state
+    btn.dataset.state = newState ? 'all' : 'none';
+    btn.textContent = newState ? 'Deselect All' : 'Select All';
+
+    // Update summary text
+    updateReviewSummary();
+};
 
 window.toggleGroupSelection = function (el) {
     el.classList.toggle('selected');
