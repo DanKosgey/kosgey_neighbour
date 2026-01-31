@@ -35,6 +35,32 @@ export class SchedulerService {
 
         this.tasks.push(randomContentTask);
         console.log('✅ Random content scheduler initialized: Every 2 hours.');
+
+        // Self-Ping Every 10 Minutes (Keep-Alive)
+        const pingTask = cron.schedule('*/10 * * * *', async () => {
+            this.runSelfPing();
+        });
+        this.tasks.push(pingTask);
+        console.log('✅ Self-ping scheduler initialized: Every 10 minutes.');
+    }
+
+    private async runSelfPing() {
+        try {
+            const port = process.env.PORT || 3000;
+            const url = process.env.RENDER_EXTERNAL_URL
+                ? `${process.env.RENDER_EXTERNAL_URL}/health`
+                : `http://localhost:${port}/health`;
+
+            console.log(`💓 Sending keep-alive ping to ${url}...`);
+            const response = await fetch(url);
+            if (response.ok) {
+                console.log('✅ Keep-alive ping successful (200 OK)');
+            } else {
+                console.error(`⚠️ Keep-alive ping returned status: ${response.status}`);
+            }
+        } catch (error: any) {
+            console.error('❌ Keep-alive ping failed:', error.message);
+        }
     }
 
     private async broadcastRandomContent() {
