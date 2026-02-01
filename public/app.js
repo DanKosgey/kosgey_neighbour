@@ -911,6 +911,37 @@ async function loadUserProfile() {
 
         // Add save button listener
         document.getElementById('save-user-profile').addEventListener('click', saveUserProfile);
+
+        // Add owner phone save button listener
+        document.getElementById('save-owner-phone-btn')?.addEventListener('click', async () => {
+            const btn = document.getElementById('save-owner-phone-btn');
+            const input = document.getElementById('system-owner-phone');
+            const originalText = btn.textContent;
+
+            btn.textContent = '...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/settings/system`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: 'owner_phone', value: input.value })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    btn.textContent = '✓';
+                    showToast('Owner phone updated successfully!', 'success');
+                    setTimeout(() => btn.textContent = originalText, 2000);
+                } else {
+                    alert('Failed to save owner phone');
+                }
+            } catch (error) {
+                console.error('Failed to save owner phone:', error);
+                alert('Error saving owner phone');
+            } finally {
+                btn.disabled = false;
+            }
+        });
     } catch (error) {
         console.error('Failed to load user profile:', error);
         alert('Failed to load user profile');

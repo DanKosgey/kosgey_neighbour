@@ -53,6 +53,25 @@ export class OwnerService {
     }
 
     /**
+     * Get owner phone from database or config
+     * This allows runtime updates without restart
+     */
+    async getOwnerPhoneFromDB(): Promise<string> {
+        try {
+            const { systemSettingsService } = await import('./systemSettings');
+            const dbPhone = await systemSettingsService.get('owner_phone');
+            if (dbPhone) {
+                // Update cache
+                this.ownerPhone = dbPhone.replace(/[^0-9]/g, '');
+                return this.ownerPhone;
+            }
+        } catch (e) {
+            // Database not available or setting not found
+        }
+        return this.ownerPhone;
+    }
+
+    /**
      * Normalize a JID to its canonical phone number format
      * Maps known LIDs to their phone numbers
      */

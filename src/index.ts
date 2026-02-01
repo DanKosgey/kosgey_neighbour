@@ -230,6 +230,13 @@ app.post('/api/settings/system', async (req, res) => {
             return res.status(400).json({ error: 'Key and value are required' });
         }
         await systemSettingsService.set(key, String(value));
+
+        // If updating owner_phone, also update the ownerService cache
+        if (key === 'owner_phone') {
+            const { ownerService } = await import('./services/ownerService');
+            await ownerService.getOwnerPhoneFromDB();
+        }
+
         res.json({ success: true });
     } catch (error) {
         console.error('Failed to update system setting:', error);
@@ -364,9 +371,18 @@ app.get('/api/user-profile', async (req, res) => {
             });
         }
 
+        // Get owner phone from database or config
+        let ownerPhone = config.ownerPhone || 'Not configured';
+        try {
+            const dbOwnerPhone = await systemSettingsService.get('owner_phone');
+            if (dbOwnerPhone) ownerPhone = dbOwnerPhone;
+        } catch (e) {
+            // ignore
+        }
+
         const response = {
             ...profile,
-            configOwnerPhone: config.ownerPhone || 'Not configured'
+            configOwnerPhone: ownerPhone
         };
 
         res.json(response);
