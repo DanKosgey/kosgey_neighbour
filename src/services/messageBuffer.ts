@@ -18,7 +18,7 @@ export class MessageBuffer {
     private timers: Map<string, NodeJS.Timeout> = new Map();
 
     // Strict 60s window for standard users
-    private readonly BATCH_WINDOW_MS = 60000; // 60 seconds
+    private readonly BATCH_WINDOW_MS = 30000; // 30 seconds
     private readonly OWNER_WINDOW_MS = 5000; // 5 seconds for owner
 
     constructor(private processBatchCallback: (jid: string, messages: string[]) => Promise<void>) { }
