@@ -22,7 +22,8 @@ export async function runMigrations() {
         // But throwing here might cause boot loop. Log and continue? 
         // Better to throw so Render restarts/alerts? 
         // Let's check error code. If it's already applied, it's fine.
-        if ((error as any).code === '42P07') { // Table exists?
+        if ((error as any).code === '42P07' || (error as any).code === '42701') { // Table exists OR Column exists?
+            console.log('⚠️ Migration notice: Table or column already exists. Skipping...');
             // ignore
         }
         // For now, catch but log loudly.
