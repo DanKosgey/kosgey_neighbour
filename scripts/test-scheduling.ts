@@ -46,7 +46,7 @@ async function testScheduling() {
             customerName: 'Test Customer',
             customerEmail: 'test@example.com',
             purpose: 'Test meeting via WhatsApp AI Agent',
-            customerPhone: '+254712345678'
+            customerPhone: process.env.OWNER_PHONE_NUMBER || '+254700000000'
         });
 
         if (result.success) {

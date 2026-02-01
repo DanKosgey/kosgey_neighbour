@@ -892,6 +892,9 @@ async function loadUserProfile() {
 
         // Populate form fields
         document.getElementById('user-full-name').value = profile.fullName || '';
+        if (document.getElementById('system-owner-phone')) {
+            document.getElementById('system-owner-phone').value = profile.configOwnerPhone || 'Not set in .env';
+        }
         document.getElementById('user-preferred-name').value = profile.preferredName || '';
         document.getElementById('user-title').value = profile.title || '';
         document.getElementById('user-company').value = profile.company || '';

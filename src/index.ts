@@ -364,7 +364,12 @@ app.get('/api/user-profile', async (req, res) => {
             });
         }
 
-        res.json(profile);
+        const response = {
+            ...profile,
+            configOwnerPhone: config.ownerPhone || 'Not configured'
+        };
+
+        res.json(response);
     } catch (error) {
         console.error('Failed to fetch user profile:', error);
         res.status(500).json({ error: 'Failed to fetch user profile' });
