@@ -707,7 +707,7 @@
 
             <!-- Shops Page -->
             <div class="page" id="shops-page">
-                <header class="page-header shop-page-header">
+                <header class="page-header shop-page-header animate-in">
                     <div style="display: flex; align-items: center; gap: 1rem;">
                         <button class="btn-refresh" onclick="switchPage('dashboard')" aria-label="Back to Home">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -719,26 +719,36 @@
                 </header>
 
                 <!-- Views Container -->
-                <div id="shopflow-container">
+                <div id="shopflow-container" class="animate-in" style="animation-delay: 0.1s;">
                     <!-- Shops List View -->
                     <div id="shops-view" class="view-section active">
-                        <div class="shops-header">
+                        <div class="shops-header glass-panel"
+                            style="padding: 2rem; border-radius: 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem;">
                             <div>
-                                <h2 style="font-size: 1.75rem; color: var(--text-primary); margin-bottom: 0.5rem;">Your
-                                    Collections</h2>
-                                <p style="color: var(--text-secondary);">Manage your shops and career portfolios</p>
+                                <h2
+                                    style="font-size: 2rem; background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem;">
+                                    Your Collections</h2>
+                                <p style="color: var(--text-secondary); font-size: 1.1rem;">Manage your shops and career
+                                    portfolios</p>
                             </div>
-                            <button class="btn-primary" onclick="openCollectionTypeModal()" style="width: auto;">
+                            <button class="btn-primary" onclick="openCollectionTypeModal()"
+                                style="padding: 1rem 2rem; font-size: 1rem; border-radius: 12px; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);">
                                 + Create New
                             </button>
                         </div>
 
-                        <div id="shopsGrid" class="shops-grid">
+                        <div id="shopsGrid" class="shops-grid"
+                            style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem;">
                             <!-- Populated by JS -->
-                            <div class="empty-state">
-                                <div class="empty-state-icon">📦</div>
-                                <h3 class="empty-state-text">No collections yet</h3>
-                                <p>Create a shop for products or a career portfolio to showcase your skills.</p>
+                            <div class="empty-state glass-panel"
+                                style="grid-column: 1 / -1; padding: 4rem; text-align: center; border-radius: 24px;">
+                                <div class="empty-state-icon"
+                                    style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.8; animation: float 6s infinite ease-in-out;">
+                                    📦</div>
+                                <h3 class="empty-state-text" style="font-size: 1.5rem; margin-bottom: 0.5rem;">No
+                                    collections yet</h3>
+                                <p style="color: var(--text-secondary); max-width: 400px; margin: 0 auto;">Create a shop
+                                    for products or a career portfolio to showcase your skills.</p>
                             </div>
                         </div>
                     </div>
@@ -746,75 +756,106 @@
                     <!-- Single Shop Products View -->
                     <div id="products-view" class="view-section" style="display: none;">
                         <button class="btn-secondary back-btn" onclick="showShopsView()"
-                            style="margin-bottom: 2rem; display: flex; align-items: center; gap: 0.5rem; width: auto;">
+                            style="margin-bottom: 2rem; display: flex; align-items: center; gap: 0.5rem; width: auto; background: var(--glass-bg); padding: 0.75rem 1.5rem; border-radius: 12px; border: 1px solid var(--glass-border);">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
                             </svg>
                             Back to Shops
                         </button>
 
-                        <div class="current-shop-banner">
-                            <div class="current-shop-icon" id="currentShopIcon">🏪</div>
+                        <div class="current-shop-banner glass-panel"
+                            style="padding: 3rem; border-radius: 24px; display: flex; align-items: center; gap: 2rem; margin-bottom: 2rem; position: relative; overflow: hidden;">
+                            <div
+                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(16, 185, 129, 0.05)); z-index: -1;">
+                            </div>
+                            <div class="current-shop-icon" id="currentShopIcon"
+                                style="font-size: 4rem; filter: drop-shadow(0 0 10px rgba(255,255,255,0.2));">🏪</div>
                             <div class="current-shop-info">
-                                <h3 id="currentShopName">Shop Name</h3>
-                                <p id="currentShopDesc">Shop Description</p>
+                                <h3 id="currentShopName"
+                                    style="font-size: 2.5rem; font-weight: 800; margin-bottom: 0.5rem;">Shop Name</h3>
+                                <p id="currentShopDesc" style="font-size: 1.1rem; color: var(--text-secondary);">Shop
+                                    Description</p>
                             </div>
                         </div>
 
-                        <div class="products-view">
+                        <div class="products-view" style="display: grid; grid-template-columns: 1fr 2fr; gap: 2rem;">
                             <!-- Add Product Form -->
-                            <div class="add-product-section">
-                                <h3 id="addProductTitle">Add New Product</h3>
-                                <form id="addProductForm" onsubmit="handleAddProduct(event)">
+                            <div class="add-product-section glass-panel"
+                                style="padding: 2rem; border-radius: 20px; height: fit-content; position: sticky; top: 2rem;">
+                                <h3 id="addProductTitle"
+                                    style="font-size: 1.25rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
+                                    Add New Product</h3>
+                                <form id="addProductForm" onsubmit="handleAddProduct(event)"
+                                    style="display: flex; flex-direction: column; gap: 1rem;">
                                     <div class="form-group">
-                                        <label id="productNameLabel" for="productName">Product Name</label>
-                                        <input type="text" id="productName" required
-                                            placeholder="e.g. Wireless Headphones">
+                                        <label id="productNameLabel" for="productName"
+                                            style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Product
+                                            Name</label>
+                                        <input type="text" id="productName" required class="input-modern"
+                                            placeholder="e.g. Wireless Headphones"
+                                            style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white;">
                                     </div>
 
                                     <div class="form-group" id="productPriceStockGroup"
                                         style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                                         <div id="productPriceGroup">
-                                            <label>Price</label>
-                                            <input type="number" id="productPrice" placeholder="0.00">
+                                            <label
+                                                style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Price</label>
+                                            <input type="number" id="productPrice" placeholder="0.00"
+                                                class="input-modern"
+                                                style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white;">
                                         </div>
                                         <div id="productStockGroup">
-                                            <label>Stock</label>
-                                            <input type="number" id="productStock" placeholder="0">
+                                            <label
+                                                style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Stock</label>
+                                            <input type="number" id="productStock" placeholder="0" class="input-modern"
+                                                style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white;">
                                         </div>
                                     </div>
 
                                     <div class="form-group">
-                                        <label id="productDescLabel" for="productDesc">Description</label>
-                                        <textarea id="productDesc" rows="3"
-                                            placeholder="Describe your product..."></textarea>
+                                        <label id="productDescLabel" for="productDesc"
+                                            style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Description</label>
+                                        <textarea id="productDesc" rows="3" class="input-modern"
+                                            placeholder="Describe your product..."
+                                            style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white; resize: vertical;"></textarea>
                                     </div>
 
                                     <div class="form-group">
-                                        <label>Product Image</label>
+                                        <label
+                                            style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Product
+                                            Image</label>
                                         <div class="image-upload" id="imageUploadArea"
-                                            onclick="document.getElementById('imageInput').click()">
+                                            onclick="document.getElementById('imageInput').click()"
+                                            style="border: 2px dashed var(--border); border-radius: 16px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.3s ease;">
                                             <input type="file" id="imageInput" accept="image/*"
-                                                onchange="handleImageSelect(event)">
+                                                onchange="handleImageSelect(event)" style="display: none;">
                                             <div id="uploadPlaceholder">
-                                                <div class="upload-icon">📷</div>
-                                                <div class="upload-text">Click to upload image</div>
+                                                <div class="upload-icon"
+                                                    style="font-size: 1.5rem; margin-bottom: 0.5rem;">📷</div>
+                                                <div class="upload-text"
+                                                    style="font-size: 0.9rem; color: var(--text-secondary);">Click to
+                                                    upload image</div>
                                             </div>
-                                            <img id="imagePreview" class="preview-image">
+                                            <img id="imagePreview" class="preview-image"
+                                                style="max-width: 100%; border-radius: 8px; display: none;">
                                         </div>
                                         <button type="button" id="removeImageBtn" class="delete-product-btn"
-                                            style="display: none; margin-top: 10px;" onclick="removeImage()">Remove
+                                            style="display: none; margin-top: 10px; width: 100%; padding: 0.5rem; border-radius: 8px; background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: none; cursor: pointer;"
+                                            onclick="removeImage()">Remove
                                             Image</button>
                                     </div>
 
-                                    <button type="submit" class="btn-primary" id="addProductSubmitBtn">Add
+                                    <button type="submit" class="btn-primary" id="addProductSubmitBtn"
+                                        style="padding: 1rem; border-radius: 12px; font-weight: 600; margin-top: 1rem;">Add
                                         Product</button>
                                 </form>
                             </div>
 
                             <!-- Products List -->
                             <div class="products-section">
-                                <div id="productsGrid" class="products-grid">
+                                <div id="productsGrid" class="products-grid"
+                                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem;">
                                     <!-- Populated by JS -->
                                 </div>
                             </div>
@@ -823,28 +864,42 @@
                 </div>
 
                 <!-- Collection Type Choice Modal -->
-                <div id="collectionTypeModal" class="modal" style="display: none;">
-                    <div class="modal-content" style="max-width: 600px;">
-                        <div class="modal-header">
-                            <h3>What would you like to create?</h3>
-                            <button class="btn-close" onclick="closeCollectionTypeModal()">×</button>
+                <div id="collectionTypeModal" class="modal"
+                    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 1000; align-items: center; justify-content: center;">
+                    <div class="modal-content glass-panel"
+                        style="max-width: 600px; width: 90%; padding: 2rem; border-radius: 24px; position: relative; animation: fadeInScale 0.3s ease-out;">
+                        <div class="modal-header" style="text-align: center; margin-bottom: 2rem;">
+                            <h3 style="font-size: 1.75rem; font-weight: 700;">What would you like to create?</h3>
+                            <button class="btn-close" onclick="closeCollectionTypeModal()"
+                                style="position: absolute; top: 1.5rem; right: 1.5rem; background: none; border: none; font-size: 1.5rem; color: var(--text-secondary); cursor: pointer;">×</button>
                         </div>
-                        <div class="collection-type-grid">
-                            <div class="collection-type-card" onclick="selectCollectionType('shop')">
-                                <div class="collection-type-icon">🏪</div>
-                                <h4>Product Shop</h4>
-                                <p>Showcase and sell your products with prices, stock, and descriptions</p>
-                                <div class="collection-type-features">
+                        <div class="collection-type-grid"
+                            style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                            <div class="collection-type-card" onclick="selectCollectionType('shop')"
+                                style="background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; border: 1px solid transparent;">
+                                <div class="collection-type-icon" style="font-size: 2.5rem; margin-bottom: 1rem;">🏪
+                                </div>
+                                <h4 style="margin-bottom: 0.5rem; color: white;">Product Shop</h4>
+                                <p
+                                    style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">
+                                    Showcase and sell your products with prices, stock, and descriptions</p>
+                                <div class="collection-type-features"
+                                    style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.8rem; color: var(--accent-glow);">
                                     <span>✓ Product catalog</span>
                                     <span>✓ Pricing & inventory</span>
                                     <span>✓ Sales tracking</span>
                                 </div>
                             </div>
-                            <div class="collection-type-card" onclick="selectCollectionType('career')">
-                                <div class="collection-type-icon">💼</div>
-                                <h4>Career Portfolio</h4>
-                                <p>Showcase your skills, projects, and professional achievements</p>
-                                <div class="collection-type-features">
+                            <div class="collection-type-card" onclick="selectCollectionType('career')"
+                                style="background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; border: 1px solid transparent;">
+                                <div class="collection-type-icon" style="font-size: 2.5rem; margin-bottom: 1rem;">💼
+                                </div>
+                                <h4 style="margin-bottom: 0.5rem; color: white;">Career Portfolio</h4>
+                                <p
+                                    style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">
+                                    Showcase your skills, projects, and professional achievements</p>
+                                <div class="collection-type-features"
+                                    style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.8rem; color: var(--accent-glow);">
                                     <span>✓ Skills & projects</span>
                                     <span>✓ Professional profile</span>
                                     <span>✓ Personal branding</span>

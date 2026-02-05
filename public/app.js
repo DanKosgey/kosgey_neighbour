@@ -2295,10 +2295,10 @@ window.loadShops = async function () {
 
         if (!shops || shops.length === 0) {
             grid.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">🏪</div>
-                    <div class="empty-state-text">No collections yet</div>
-                    <p>Create a shop or career portfolio to get started!</p>
+                <div class="empty-state glass-panel" style="padding: 4rem; text-align: center; border-radius: 24px;">
+                    <div class="empty-state-icon" style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.8; animation: float 6s infinite ease-in-out;">🏪</div>
+                    <div class="empty-state-text" style="font-size: 1.5rem; margin-bottom: 0.5rem;">No collections yet</div>
+                    <p style="color: var(--text-secondary);">Create a shop or career portfolio to get started!</p>
                 </div>
             `;
         } else {
@@ -2321,16 +2321,27 @@ window.loadShops = async function () {
                     '<span class="collection-type-badge shop">Shop</span>';
 
                 return `
-                    <div class="shop-card" onclick="openShop(${shop.id})" style="animation-delay: ${index * 0.1}s">
-                        ${typeBadge}
-                        <button class="delete-shop-btn" onclick="event.stopPropagation(); deleteShop(${shop.id})">×</button>
-                        <div class="shop-icon">${shop.emoji}</div>
-                        <div class="shop-name">${shop.name}</div>
-                        <div class="shop-description">${shop.description || ''}</div>
-                        <div class="shop-stats">
-                            <div class="stat">
-                                <div class="stat-value">${productCount}</div>
-                                <div class="stat-label">${itemLabel}</div>
+                    <div class="shop-card glass-panel" onclick="openShop(${shop.id})" style="animation-delay: ${index * 0.1}s; position: relative; padding: 1.5rem; border-radius: 20px; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border: 1px solid var(--glass-border); display: flex; flex-direction: column; gap: 1rem; overflow: hidden;">
+                        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, rgba(255,255,255,0.03), transparent); z-index: -1;"></div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            ${typeBadge}
+                            <button class="delete-shop-btn" onclick="event.stopPropagation(); deleteShop(${shop.id})" style="background: rgba(239, 68, 68, 0.1); color: var(--danger); border: none; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease;">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div class="shop-icon" style="font-size: 2.5rem; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));">${shop.emoji}</div>
+                            <div>
+                                <div class="shop-name" style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.25rem;">${shop.name}</div>
+                                <div class="shop-description" style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${shop.description || ''}</div>
+                            </div>
+                        </div>
+
+                        <div class="shop-stats" style="display: flex; gap: 1rem; margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border);">
+                            <div class="stat" style="display: flex; flex-direction: column;">
+                                <div class="stat-value" style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);">${productCount}</div>
+                                <div class="stat-label" style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">${itemLabel}</div>
                             </div>
                             ${valueHtml}
                         </div>
@@ -2419,10 +2430,10 @@ window.renderProducts = function (products, shopType = 'shop') {
 
     if (!products || products.length === 0) {
         grid.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">${isCareer ? '💼' : '📦'}</div>
-                <div class="empty-state-text">No items yet</div>
-                <p>${isCareer ? 'Add your first skill or project!' : 'Add your first product to this shop!'}</p>
+            <div class="empty-state glass-panel" style="grid-column: 1/-1; padding: 4rem; text-align: center; border-radius: 20px;">
+                <div class="empty-state-icon" style="font-size: 4rem; margin-bottom: 1rem; opacity: 0.8;">${isCareer ? '💼' : '📦'}</div>
+                <div class="empty-state-text" style="font-size: 1.5rem; margin-bottom: 0.5rem;">No items yet</div>
+                <p style="color: var(--text-secondary);">${isCareer ? 'Add your first skill or project!' : 'Add your first product to this shop!'}</p>
             </div>
         `;
     } else {
@@ -2450,13 +2461,15 @@ window.renderProducts = function (products, shopType = 'shop') {
             }
 
             return `
-                <div class="product-card" style="animation: fadeIn 0.6s ease ${index * 0.1}s both">
-                    <img src="${product.imageUrl || product.image || 'https://placehold.co/400x300?text=No+Image'}" alt="${product.name}" class="product-image">
-                    <div class="product-info">
-                        <div class="product-name">${product.name}</div>
-                        <div class="product-description">${product.description}</div>
+                <div class="product-card glass-panel" style="animation: fadeIn 0.6s ease ${index * 0.1}s both; overflow: hidden; border-radius: 16px; border: 1px solid var(--glass-border); transition: transform 0.3s ease, box-shadow 0.3s ease; display: flex; flex-direction: column;">
+                    <div style="position: relative; padding-top: 60%; overflow: hidden; background: rgba(0,0,0,0.2);">
+                        <img src="${product.imageUrl || product.image || 'https://placehold.co/400x300?text=No+Image'}" alt="${product.name}" class="product-image" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease;">
+                    </div>
+                    <div class="product-info" style="padding: 1.25rem; flex: 1; display: flex; flex-direction: column;">
+                        <div class="product-name" style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; line-height: 1.3;">${product.name}</div>
+                        <div class="product-description" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.5; flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">${product.description}</div>
                         ${footerHtml}
-                        <button class="delete-product-btn" onclick="deleteProduct(${product.id})">Delete</button>
+                        <button class="delete-product-btn" onclick="deleteProduct(${product.id})" style="margin-top: 1rem; width: 100%; padding: 0.75rem; border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05); color: #fca5a5; border-radius: 8px; cursor: pointer; transition: all 0.2s ease;">Delete</button>
                     </div>
                 </div>
             `;
