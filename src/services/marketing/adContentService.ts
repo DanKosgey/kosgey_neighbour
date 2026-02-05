@@ -1,8 +1,10 @@
+import fs from 'fs';
+import path from 'path';
 import { geminiService } from '../ai/gemini';
 import { googleImageGenerationService } from '../googleImageGeneration';
 import { db } from '../../database';
-import { businessProfile, marketingCampaigns } from '../../database/schema';
-import { eq } from 'drizzle-orm';
+import { businessProfile, marketingCampaigns, products } from '../../database/schema';
+import { eq, and, asc } from 'drizzle-orm';
 
 // --- Types based on User Idea ---
 export enum VisualStyle {
@@ -170,6 +172,36 @@ Less is more. Bold and simple beats complex and detailed.`;
     }
 
     /**
+     * Resolve product image to a file path (handles data URLs and file paths)
+     */
+    private resolveProductImageToPath(imageUrl: string | null | undefined): string | undefined {
+        if (!imageUrl) return undefined;
+        if (imageUrl.startsWith('data:')) {
+            const match = imageUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+            if (!match) return undefined;
+            const ext = match[1] === 'jpeg' ? 'jpg' : match[1];
+            const tempDir = path.join(process.cwd(), 'temp');
+            if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+            const filePath = path.join(tempDir, `product_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`);
+            fs.writeFileSync(filePath, Buffer.from(match[2], 'base64'));
+            return filePath;
+        }
+        if (fs.existsSync(imageUrl)) return imageUrl;
+        return undefined;
+    }
+
+    /**
+     * Get image from product (supports imageUrl, imageUrls array for career multi-photo)
+     */
+    private getProductImage(product: any, imageIndex: number = 0): string | undefined {
+        const urls = product.imageUrls && Array.isArray(product.imageUrls) && product.imageUrls.length > 0
+            ? product.imageUrls
+            : product.imageUrl ? [product.imageUrl] : [];
+        const url = urls[imageIndex % urls.length];
+        return url ? this.resolveProductImageToPath(url) : undefined;
+    }
+
+    /**
      * Generate complete ad content (Text + Image URL/Path)
      */
     public async generateAd(campaignId: number, styleHint: string = 'balanced', customInstructions?: string): Promise<{ text: string, imagePath?: string }> {
@@ -181,6 +213,47 @@ Less is more. Bold and simple beats complex and detailed.`;
 
         // 2. Determine Business Profile (Campaign specific OR Global Fallback)
         let profile: any = campaign;
+
+        // If campaign uses entire shop: rotate through all products
+        if (campaign.contentSource === 'existing' && campaign.selectedShopId) {
+            const shopProducts = await db.select().from(products).where(eq(products.shopId, campaign.selectedShopId)).orderBy(asc(products.id));
+            if (shopProducts.length > 0) {
+                const settings = (campaign.settings as Record<string, unknown>) || {};
+                const lastIndex = (settings.lastRotatedProductIndex as number) ?? 0;
+                const nextIndex = lastIndex % shopProducts.length;
+                const product = shopProducts[nextIndex];
+                const productInfo = product.description || `${product.name}: ${product.description || ''}`.trim();
+                profile = { ...profile, productInfo: profile.productInfo || productInfo };
+                const productImagePath = this.getProductImage(product, nextIndex);
+                if (productImagePath) {
+                    console.log(`📦 Rotating shop: using product ${nextIndex + 1}/${shopProducts.length} "${product.name}"`);
+                    const adCopy = await this.generateAdCopy(profile, this.getRotatedStyle(campaign.startDate!), this.extractTimeContext(styleHint), this.getRotatedFramework(campaign.startDate!), customInstructions, campaign.name, campaign.businessDescription, campaign.companyLink);
+                    const newIndex = (nextIndex + 1) % shopProducts.length;
+                    await db.update(marketingCampaigns).set({ settings: { ...settings, lastRotatedProductIndex: newIndex } }).where(eq(marketingCampaigns.id, campaignId));
+                    return { text: this.formatAdOutput(adCopy, campaign.companyLink), imagePath: productImagePath };
+                }
+                console.log(`📦 Product "${product.name}" has no image, using AI to generate ad visual`);
+                await db.update(marketingCampaigns).set({ settings: { ...settings, lastRotatedProductIndex: (nextIndex + 1) % shopProducts.length } }).where(eq(marketingCampaigns.id, campaignId));
+            }
+        }
+
+        // If campaign uses single product
+        if (campaign.contentSource === 'existing' && campaign.selectedProductId) {
+            const product = await db.query.products.findFirst({
+                where: eq(products.id, campaign.selectedProductId)
+            });
+            if (product) {
+                const productInfo = product.description || `${product.name}: ${product.description || ''}`.trim();
+                profile = { ...profile, productInfo: profile.productInfo || productInfo };
+                const productImagePath = this.getProductImage(product);
+                if (productImagePath) {
+                    console.log(`📦 Using existing product image for "${product.name}"`);
+                    const adCopy = await this.generateAdCopy(profile, this.getRotatedStyle(campaign.startDate!), this.extractTimeContext(styleHint), this.getRotatedFramework(campaign.startDate!), customInstructions, campaign.name, campaign.businessDescription, campaign.companyLink);
+                    return { text: this.formatAdOutput(adCopy, campaign.companyLink), imagePath: productImagePath };
+                }
+                console.log(`📦 Product "${product.name}" has no image, using AI to generate ad visual`);
+            }
+        }
 
         // If campaign lacks specific product info, fall back to global business profile
         if (!campaign.productInfo) {
@@ -199,16 +272,14 @@ Less is more. Bold and simple beats complex and detailed.`;
         // 5. Generate Copy (with framework and business description)
         const adCopy = await this.generateAdCopy(profile, style, timeContext, framework, customInstructions, campaign.name, campaign.businessDescription, campaign.companyLink);
 
-        // 6. Generate Image
-        // visual scenario engine
+        // 6. Generate Image (AI-generated when contentSource is 'ai' or product has no image)
         const isService = this.detectServiceBusiness(profile.productInfo);
         const visualScenario = this.getRandomVisualScenario(isService);
-
         const imagePrompt = this.constructImagePrompt(profile, style, timeContext, visualScenario);
         let imagePath: string | undefined;
 
         try {
-            console.log(`🎨 Generating visual (Style: ${style}, Scenario: ${visualScenario})...`);
+            console.log(`🎨 Generating AI visual (Style: ${style}, Scenario: ${visualScenario})...`);
             imagePath = await googleImageGenerationService.generateImage(imagePrompt);
         } catch (e) {
             console.error("Failed to generate ad image:", e);

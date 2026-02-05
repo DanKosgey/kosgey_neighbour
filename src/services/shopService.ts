@@ -50,10 +50,17 @@ export class ShopService {
 
     // === PRODUCT METHODS ===
 
-    async addProduct(shopId: number, data: { name: string, description: string, price: number, stock: number, imageUrl: string }) {
+    async addProduct(shopId: number, data: { name: string, description: string, price: number, stock: number, imageUrl?: string, imageUrls?: string[] }) {
+        const imageUrl = data.imageUrl ?? (data.imageUrls && data.imageUrls[0]) ?? null;
+        const imageUrls = data.imageUrls && data.imageUrls.length > 0 ? data.imageUrls : null;
         const result = await db.insert(products).values({
             shopId,
-            ...data
+            name: data.name,
+            description: data.description,
+            price: data.price,
+            stock: data.stock,
+            imageUrl,
+            imageUrls
         }).returning();
         return result[0];
     }

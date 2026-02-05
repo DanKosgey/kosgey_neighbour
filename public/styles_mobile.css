@@ -114,32 +114,35 @@
         /* Reduce padding */
     }
 
-    /* Chats Responsive */
-    .chats-container {
-        grid-template-columns: 1fr;
-        height: calc(100vh - 140px);
-        /* Adjust for header + nav */
+    /* Chats: list full height; detail is full-screen overlay (see styles.css) */
+    .page-chats .chats-header {
+        flex-direction: row;
+        align-items: center;
     }
 
-    /* On mobile, usually we hide one pane. For now, let's just stack 
-       and rely on JS to toggle visibility if we want true app behavior.
-       But user asked for "page by page responsiveness". 
-       Stacking is the simplest responsive fix without major JS rewrite. */
-    .chat-list {
-        display: block;
-        /* Typically showing list first */
-        height: 40vh;
-        /* Split screen if simple stacking */
+    .chats-toolbar {
+        flex: 1;
+        justify-content: flex-end;
     }
 
-    .chat-detail {
-        display: block;
-        height: 50vh;
+    .chat-search-wrap {
+        max-width: none;
+        flex: 1;
     }
 
-    /* Better Mobile Chat: Toggle classes (assumes JS logic exists or added later) 
-       If we don't have JS toggles, splitting height is a safe fallback.
-    */
+    .chat-list-wrap {
+        border-radius: 16px;
+    }
+
+    .chat-item {
+        padding: 1rem;
+    }
+
+    .chat-avatar {
+        width: 44px;
+        height: 44px;
+        font-size: 1.125rem;
+    }
 
 
     /* Marketing Page Mobile Overrides */

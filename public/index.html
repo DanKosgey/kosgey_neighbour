@@ -35,14 +35,14 @@
             <div class="sidebar-header">
                 <div class="logo">
                     <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                        <circle cx="20" cy="20" r="18" fill="url(#gradient)" />
+                        <circle cx="20" cy="20" r="18" fill="url(#logo-gradient)" />
                         <path
                             d="M20 10C14.48 10 10 14.48 10 20C10 21.82 10.5 23.52 11.36 25L10 30L15.18 28.66C16.6 29.44 18.25 29.9 20 29.9C25.52 29.9 30 25.42 30 19.9C30 14.38 25.52 10 20 10Z"
                             fill="white" />
                         <defs>
-                            <linearGradient id="gradient" x1="0" y1="0" x2="40" y2="40">
-                                <stop offset="0%" stop-color="#667eea" />
-                                <stop offset="100%" stop-color="#764ba2" />
+                            <linearGradient id="logo-gradient" x1="0" y1="0" x2="40" y2="40">
+                                <stop offset="0%" stop-color="#3B82F6" />
+                                <stop offset="100%" stop-color="#8b5cf6" />
                             </linearGradient>
                         </defs>
                     </svg>
@@ -159,6 +159,234 @@
 
         <!-- Main Content -->
         <main class="main-content">
+            <!-- Analytics Page (first in DOM so it always renders at top when active) -->
+            <div class="page" id="analytics-page">
+                <div class="analytics-header">
+                    <div class="analytics-header-content">
+                        <div class="analytics-title-group">
+                            <button class="btn-refresh" onclick="switchPage('dashboard')" aria-label="Back to Home">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+                                </svg>
+                            </button>
+                            <h2>📊 WhatsApp Analytics</h2>
+                        </div>
+                        <div class="analytics-header-actions">
+                            <span class="section-badge">Last 7 days</span>
+                            <button class="btn-secondary" onclick="loadAnalytics()">🔄 Refresh</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="analytics-content">
+                    <!-- Key Metrics -->
+                    <section class="analytics-section">
+                        <div class="section-header">
+                            <h3>📈 Key Metrics</h3>
+                            <span class="section-badge">Real-time</span>
+                        </div>
+                        <div class="analytics-grid analytics-grid-6">
+                            <div class="analytics-card">
+                                <div class="card-icon">💬</div>
+                                <div class="card-content">
+                                    <h4>Total Messages</h4>
+                                    <div class="value" id="stat-total-messages">-</div>
+                                    <small>Inbound + Outbound</small>
+                                </div>
+                            </div>
+                            <div class="analytics-card">
+                                <div class="card-icon">👥</div>
+                                <div class="card-content">
+                                    <h4>Active Chats</h4>
+                                    <div class="value" id="stat-active-chats">-</div>
+                                    <small>Unique contacts</small>
+                                </div>
+                            </div>
+                            <div class="analytics-card">
+                                <div class="card-icon">⏱️</div>
+                                <div class="card-content">
+                                    <h4>Avg Response Time</h4>
+                                    <div class="value" id="stat-response-time">-</div>
+                                    <small>Agent reply speed</small>
+                                </div>
+                            </div>
+                            <div class="analytics-card">
+                                <div class="card-icon">🆕</div>
+                                <div class="card-content">
+                                    <h4>New Contacts</h4>
+                                    <div class="value" id="stat-new-contacts">-</div>
+                                    <small>Last 7 days</small>
+                                </div>
+                            </div>
+                            <div class="analytics-card">
+                                <div class="card-icon">📢</div>
+                                <div class="card-content">
+                                    <h4>Ad Read Rate</h4>
+                                    <div class="value" id="stat-read-rate">-</div>
+                                    <small>Campaign engagement</small>
+                                </div>
+                            </div>
+                            <div class="analytics-card">
+                                <div class="card-icon">📦</div>
+                                <div class="card-content">
+                                    <h4>Queue Pending</h4>
+                                    <div class="value" id="stat-queue-pending">-</div>
+                                    <small>Messages awaiting</small>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Message Volume & Peak Hours -->
+                    <section class="analytics-section">
+                        <div class="section-header">
+                            <h3>📊 Message Volume & Activity</h3>
+                            <span class="section-badge">Trends</span>
+                        </div>
+                        <div class="charts-row">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h4>Daily Message Volume</h4>
+                                    <span class="chart-info">Messages per day (last 7 days)</span>
+                                </div>
+                                <canvas id="volumeChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h4>Peak Activity Hours</h4>
+                                    <span class="chart-info">When your contacts are most active (UTC)</span>
+                                </div>
+                                <canvas id="peakHoursChart"></canvas>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Message Mix & Engagement -->
+                    <section class="analytics-section">
+                        <div class="section-header">
+                            <h3>🎯 Message Mix & Engagement</h3>
+                        </div>
+                        <div class="charts-row charts-row-3">
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h4>Message Types</h4>
+                                    <span class="chart-info">Text, image, voice, etc.</span>
+                                </div>
+                                <canvas id="messageTypesChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h4>Inbound vs Outbound</h4>
+                                    <span class="chart-info">User vs Agent messages</span>
+                                </div>
+                                <canvas id="inboundOutboundChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <div class="chart-header">
+                                    <h4>Ad Engagement Funnel</h4>
+                                    <span class="chart-info">Delivered → Read → Replied</span>
+                                </div>
+                                <canvas id="engagementChart"></canvas>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Top Performers -->
+                    <section class="analytics-section">
+                        <div class="section-header">
+                            <h3>🏆 Top Performers</h3>
+                            <span class="section-badge">By volume</span>
+                        </div>
+                        <div class="top-performers-grid">
+                            <div class="table-container flex-1" id="contacts-table-container">
+                                <h4 class="table-title">Most Active Contacts</h4>
+                                <div class="table-wrapper" id="contacts-table-wrapper" style="display: none;">
+                                    <table class="analytics-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Contact</th>
+                                                <th>Msgs</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="top-contacts-body"></tbody>
+                                    </table>
+                                </div>
+                                <div class="empty-state" id="top-contacts-empty">
+                                    <div class="empty-icon">💬</div>
+                                    <p>No message data yet</p>
+                                    <small>Chats will appear as conversations happen</small>
+                                </div>
+                            </div>
+                            <div class="table-container flex-1" id="groups-table-container">
+                                <h4 class="table-title">Top Groups</h4>
+                                <div class="table-wrapper" id="groups-table-wrapper" style="display: none;">
+                                    <table class="analytics-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Group</th>
+                                                <th>Members</th>
+                                                <th>Admins</th>
+                                                <th>Age</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="top-groups-body"></tbody>
+                                    </table>
+                                </div>
+                                <div class="empty-state" id="groups-empty">
+                                    <div class="empty-icon">👥</div>
+                                    <p>No groups found</p>
+                                    <small>Add the bot to WhatsApp groups to see analytics</small>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Campaign Performance -->
+                    <section class="analytics-section">
+                        <div class="section-header">
+                            <h3>📣 Campaign Performance</h3>
+                            <span class="section-badge">Marketing</span>
+                        </div>
+                        <div class="chart-container" style="min-height: 400px;">
+                            <div class="chart-header">
+                                <h4>Top Campaigns by Reads & Replies</h4>
+                                <span class="chart-info">Compare campaign effectiveness</span>
+                            </div>
+                            <div style="flex: 1; min-height: 300px; position: relative;">
+                                <canvas id="campaignChart"></canvas>
+                            </div>
+                            <div class="empty-state" id="campaigns-empty" style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                                <div class="empty-icon">📭</div>
+                                <p>No campaign data yet</p>
+                                <small>Start a marketing campaign to see performance metrics</small>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Insights -->
+                    <section class="analytics-section">
+                        <div class="section-header">
+                            <h3>💡 Insights & Recommendations</h3>
+                            <span class="section-badge">AI-driven</span>
+                        </div>
+                        <div class="insights-container" id="insights-container">
+                            <div class="insight-card">
+                                <span class="insight-icon">📈</span>
+                                <p id="insight-volume">Loading...</p>
+                            </div>
+                            <div class="insight-card">
+                                <span class="insight-icon">⏰</span>
+                                <p id="insight-peak">Loading...</p>
+                            </div>
+                            <div class="insight-card">
+                                <span class="insight-icon">🎯</span>
+                                <p id="insight-engagement">Loading...</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
             <!-- Dashboard Page -->
             <div class="page active" id="dashboard-page">
                 <header class="page-header">
@@ -226,7 +454,7 @@
                 <!-- Stats Grid -->
                 <div class="stats-grid" id="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #3B82F6 0%, #8b5cf6 100%);">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                                 <path
                                     d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -240,7 +468,7 @@
                     </div>
 
                     <div class="stat-card">
-                        <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #ec4899 0%, #f59e0b 100%);">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                                 <path
                                     d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -254,7 +482,7 @@
                     </div>
 
                     <div class="stat-card">
-                        <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #06b6d4 0%, #3B82F6 100%);">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                                 <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
@@ -267,7 +495,7 @@
                     </div>
 
                     <div class="stat-card">
-                        <div class="stat-icon" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);">
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                                 <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
@@ -296,26 +524,26 @@
             </div>
 
             <!-- Chats Page -->
-            <div class="page" id="chats-page">
-                <header class="page-header">
-                    <div style="display: flex; align-items: center; gap: 1rem;">
-                        <button class="btn-refresh" onclick="switchPage('dashboard')" aria-label="Back to Home">
+            <div class="page page-chats" id="chats-page">
+                <header class="page-header chats-header">
+                    <div class="chats-header-left">
+                        <button class="btn-refresh btn-back" onclick="switchPage('dashboard')" aria-label="Back to Home">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
                             </svg>
                         </button>
                         <h2>Conversations</h2>
                     </div>
-                    <div style="display: flex; gap: 1rem; align-items: center;">
-                        <div class="search-box">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                    <div class="chats-toolbar">
+                        <div class="search-box chat-search-wrap">
+                            <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fill-rule="evenodd"
                                     d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
                                     clip-rule="evenodd" />
                             </svg>
-                            <input type="text" placeholder="Search conversations..." id="chat-search">
+                            <input type="text" placeholder="Search conversations…" id="chat-search" autocomplete="off">
                         </div>
-                        <button class="btn-refresh" id="refresh-chats-btn" aria-label="Refresh Chats">
+                        <button class="btn-refresh btn-refresh-chats" id="refresh-chats-btn" aria-label="Refresh Chats">
                             <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd"
                                     d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
@@ -326,25 +554,30 @@
                 </header>
 
                 <div class="chats-container">
-                    <div class="chat-list" id="chat-list">
-                        <div class="chat-empty">
-                            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-                                <circle cx="32" cy="32" r="32" fill="#f3f4f6" />
-                                <path d="M20 28h24M20 36h16" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" />
-                            </svg>
-                            <p>No conversations yet</p>
+                    <aside class="chat-list-wrap">
+                        <div class="chat-list" id="chat-list">
+                            <div class="chat-empty" aria-live="polite">
+                                <div class="chat-empty-icon">
+                                    <svg width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+                                        <path d="M18 24h20M18 32h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-opacity="0.5"/>
+                                    </svg>
+                                </div>
+                                <p class="chat-empty-title">No conversations yet</p>
+                                <p class="chat-empty-hint">New chats will appear here</p>
+                            </div>
                         </div>
-                    </div>
-                    <div class="chat-detail" id="chat-detail">
+                    </aside>
+                    <main class="chat-detail" id="chat-detail" aria-live="polite">
                         <div class="chat-detail-empty">
-                            <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-                                <circle cx="40" cy="40" r="40" fill="#f3f4f6" />
-                                <path d="M30 35h20M30 45h14" stroke="#9ca3af" stroke-width="2" stroke-linecap="round" />
-                            </svg>
-                            <h3>Select a conversation</h3>
-                            <p>Choose a chat from the list to view messages</p>
+                            <div class="chat-detail-empty-icon">
+                                <svg width="72" height="72" viewBox="0 0 72 72" fill="none" aria-hidden="true">
+                                    <path d="M26 30h20M26 40h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-opacity="0.5"/>
+                                </svg>
+                            </div>
+                            <h3 class="chat-detail-empty-title">Select a conversation</h3>
+                            <p class="chat-detail-empty-hint">Choose a chat from the list to view messages</p>
                         </div>
-                    </div>
+                    </main>
                 </div>
             </div>
 
@@ -459,7 +692,7 @@
                     <div class="settings-section">
                         <div class="settings-section-header">
                             <div class="settings-icon"
-                                style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                style="background: linear-gradient(135deg, #3B82F6 0%, #8b5cf6 100%);">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                                     <path
                                         d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
@@ -503,7 +736,7 @@
                     <div class="settings-section">
                         <div class="settings-section-header">
                             <div class="settings-icon"
-                                style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                                style="background: linear-gradient(135deg, #06b6d4 0%, #3B82F6 100%);">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                                     <path
                                         d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z" />
@@ -554,7 +787,7 @@
                     <div class="settings-section">
                         <div class="settings-section-header">
                             <div class="settings-icon"
-                                style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                                style="background: linear-gradient(135deg, #ec4899 0%, #f59e0b 100%);">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
                                     <path
                                         d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
@@ -639,7 +872,7 @@
                             </div>
                             <div style="display: flex; gap: 8px;">
                                 <input type="number" id="batch-window-input" placeholder="30000"
-                                    style="width: 100px; padding: 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1); background: var(--card-bg);">
+                                    style="width: 100px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg);">
                                 <button id="save-batch-window-btn" class="btn-primary"
                                     style="padding: 8px 16px; font-size: 0.9rem;">Save</button>
                             </div>
@@ -793,7 +1026,7 @@
                                             Name</label>
                                         <input type="text" id="productName" required class="input-modern"
                                             placeholder="e.g. Wireless Headphones"
-                                            style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white;">
+                                            style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(255,255,255,0.8); border: 1px solid var(--border); color: var(--text-primary);">
                                     </div>
 
                                     <div class="form-group" id="productPriceStockGroup"
@@ -803,13 +1036,13 @@
                                                 style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Price</label>
                                             <input type="number" id="productPrice" placeholder="0.00"
                                                 class="input-modern"
-                                                style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white;">
+                                                style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(255,255,255,0.8); border: 1px solid var(--border); color: var(--text-primary);">
                                         </div>
                                         <div id="productStockGroup">
                                             <label
                                                 style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Stock</label>
                                             <input type="number" id="productStock" placeholder="0" class="input-modern"
-                                                style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white;">
+                                                style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(255,255,255,0.8); border: 1px solid var(--border); color: var(--text-primary);">
                                         </div>
                                     </div>
 
@@ -818,11 +1051,11 @@
                                             style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Description</label>
                                         <textarea id="productDesc" rows="3" class="input-modern"
                                             placeholder="Describe your product..."
-                                            style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); color: white; resize: vertical;"></textarea>
+                                            style="width: 100%; padding: 0.75rem; border-radius: 12px; background: rgba(255,255,255,0.8); border: 1px solid var(--border); color: var(--text-primary); resize: vertical;"></textarea>
                                     </div>
 
-                                    <div class="form-group">
-                                        <label
+                                    <div class="form-group" id="productImageGroup">
+                                        <label id="productImageLabel"
                                             style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-secondary);">Product
                                             Image</label>
                                         <div class="image-upload" id="imageUploadArea"
@@ -830,6 +1063,7 @@
                                             style="border: 2px dashed var(--border); border-radius: 16px; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.3s ease;">
                                             <input type="file" id="imageInput" accept="image/*"
                                                 onchange="handleImageSelect(event)" style="display: none;">
+                                            <div id="careerMultiPhotosHint" style="display: none; font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem;">Career: Select multiple photos to rotate in ads</div>
                                             <div id="uploadPlaceholder">
                                                 <div class="upload-icon"
                                                     style="font-size: 1.5rem; margin-bottom: 0.5rem;">📷</div>
@@ -841,7 +1075,7 @@
                                                 style="max-width: 100%; border-radius: 8px; display: none;">
                                         </div>
                                         <button type="button" id="removeImageBtn" class="delete-product-btn"
-                                            style="display: none; margin-top: 10px; width: 100%; padding: 0.5rem; border-radius: 8px; background: rgba(239, 68, 68, 0.2); color: #fca5a5; border: none; cursor: pointer;"
+                                            style="display: none; margin-top: 10px; width: 100%; padding: 0.5rem; border-radius: 8px; background: rgba(239, 68, 68, 0.15); color: #dc2626; border: none; cursor: pointer;"
                                             onclick="removeImage()">Remove
                                             Image</button>
                                     </div>
@@ -865,7 +1099,7 @@
 
                 <!-- Collection Type Choice Modal -->
                 <div id="collectionTypeModal" class="modal"
-                    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(5px); z-index: 1000; align-items: center; justify-content: center;">
+                    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(59, 130, 246, 0.15); backdrop-filter: blur(5px); z-index: 1000; align-items: center; justify-content: center;">
                     <div class="modal-content glass-panel"
                         style="max-width: 600px; width: 90%; padding: 2rem; border-radius: 24px; position: relative; animation: fadeInScale 0.3s ease-out;">
                         <div class="modal-header" style="text-align: center; margin-bottom: 2rem;">
@@ -876,10 +1110,10 @@
                         <div class="collection-type-grid"
                             style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
                             <div class="collection-type-card" onclick="selectCollectionType('shop')"
-                                style="background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; border: 1px solid transparent;">
+                                style="background: rgba(59, 130, 246, 0.08); padding: 1.5rem; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; border: 1px solid var(--border);">
                                 <div class="collection-type-icon" style="font-size: 2.5rem; margin-bottom: 1rem;">🏪
                                 </div>
-                                <h4 style="margin-bottom: 0.5rem; color: white;">Product Shop</h4>
+                                <h4 style="margin-bottom: 0.5rem; color: var(--text-primary);">Product Shop</h4>
                                 <p
                                     style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">
                                     Showcase and sell your products with prices, stock, and descriptions</p>
@@ -891,10 +1125,10 @@
                                 </div>
                             </div>
                             <div class="collection-type-card" onclick="selectCollectionType('career')"
-                                style="background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; border: 1px solid transparent;">
+                                style="background: rgba(59, 130, 246, 0.08); padding: 1.5rem; border-radius: 16px; cursor: pointer; transition: all 0.3s ease; border: 1px solid var(--border);">
                                 <div class="collection-type-icon" style="font-size: 2.5rem; margin-bottom: 1rem;">💼
                                 </div>
-                                <h4 style="margin-bottom: 0.5rem; color: white;">Career Portfolio</h4>
+                                <h4 style="margin-bottom: 0.5rem; color: var(--text-primary);">Career Portfolio</h4>
                                 <p
                                     style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">
                                     Showcase your skills, projects, and professional achievements</p>
@@ -1058,7 +1292,7 @@
                                 <label>System Owner Phone</label>
                                 <div style="display: flex; gap: 8px; align-items: center;">
                                     <select id="owner-country-code"
-                                        style="width: 140px; padding: 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1); background: var(--card-bg); color: var(--text-primary);">
+                                        style="width: 140px; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text-primary);">
                                         <option value="+254">🇰🇪 +254</option>
                                         <option value="+1">🇺🇸 +1</option>
                                         <option value="+44">🇬🇧 +44</option>
@@ -1083,7 +1317,7 @@
                                         <option value="+20">🇪🇬 +20</option>
                                     </select>
                                     <input type="tel" id="system-owner-phone" placeholder="745026933"
-                                        style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.1); background: var(--card-bg);"
+                                        style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg);"
                                         maxlength="15">
                                     <button id="save-owner-phone-btn" class="btn-primary"
                                         style="padding: 8px 16px; font-size: 0.9rem; white-space: nowrap;">Save</button>
@@ -1452,6 +1686,38 @@
                                             placeholder="e.g. Summer Sale 2026">
                                     </div>
 
+                                    <!-- Content Source: Existing vs AI -->
+                                    <div class="marketing-form-group">
+                                        <label class="marketing-form-label">Ad Content Source</label>
+                                        <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.75rem;">
+                                            Choose how to get photos for your ads:
+                                        </p>
+                                        <div class="content-source-options" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                            <label class="content-source-option" style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem; border-radius: 12px; border: 2px solid var(--border-color); cursor: pointer; transition: all 0.2s;">
+                                                <input type="radio" name="content-source" value="existing" id="content-source-existing" onchange="toggleContentSourceUI('existing')">
+                                                <div>
+                                                    <strong>📦 Use existing items</strong>
+                                                    <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--text-secondary);">Select a product or portfolio item from your Shops page</p>
+                                                </div>
+                                            </label>
+                                            <label class="content-source-option" style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem; border-radius: 12px; border: 2px solid var(--border-color); cursor: pointer; transition: all 0.2s;">
+                                                <input type="radio" name="content-source" value="ai" id="content-source-ai" checked onchange="toggleContentSourceUI('ai')">
+                                                <div>
+                                                    <strong>✨ AI-generated photos</strong>
+                                                    <p style="margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--text-secondary);">Let AI create custom ad images based on your product description</p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                        <!-- Product/Shop selector (shown when "existing" selected) -->
+                                        <div id="campaign-product-selector" style="display: none; margin-top: 1rem;">
+                                            <label class="marketing-form-label">Select what to promote</label>
+                                            <select id="mini-selected-product" class="marketing-form-input">
+                                                <option value="">-- Load shops first --</option>
+                                            </select>
+                                            <small style="color: var(--text-secondary); display: block; margin-top: 0.25rem;">Choose "Rotate all" to cycle through every product/item in that shop. Or pick a single item.</small>
+                                        </div>
+                                    </div>
+
                                     <!-- Business Description (NEW) -->
                                     <div class="marketing-form-group">
                                         <label class="marketing-form-label">
@@ -1674,21 +1940,15 @@
     </div>
     </div>
 
-    <!-- Communities Page (New) -->
-    <div class="page" id="communities-page">
-        <header class="page-header">
-            <h2>Communities</h2>
-            <div class="header-actions">
-                <div class="search-bar">
-                    <input type="text" id="communities-search" placeholder="Search groups..."
-                        onkeyup="filterCommunities()">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
-                </div>
-                <button class="btn-refresh" onclick="loadCommunities()">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+        </main>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/app.js"></script>
+</body>
+
+</html>
                         <path fill-rule="evenodd"
                             d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
                             clip-rule="evenodd" />
@@ -1817,129 +2077,6 @@
         </div>
     </div>
 
-
-    <!-- Analytics Page -->
-    <div class="page" id="analytics-page">
-        <!-- Header -->
-        <div class="analytics-header">
-            <div class="analytics-header-content">
-                <div class="analytics-title-group">
-                    <button class="btn-refresh" onclick="switchPage('dashboard')" aria-label="Back to Home">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-                        </svg>
-                    </button>
-                    <h2>📊 Analytics Dashboard</h2>
-                </div>
-                <button class="btn-secondary" onclick="loadAnalytics()">🔄 Refresh</button>
-            </div>
-        </div>
-
-        <!-- Main Content -->
-        <div class="analytics-content">
-            <!-- Overview Section -->
-            <section class="analytics-section">
-                <div class="section-header">
-                    <h3>📈 Overview</h3>
-                    <span class="section-badge">All Time</span>
-                </div>
-
-                <div class="analytics-grid">
-                    <div class="analytics-card">
-                        <div class="card-icon">👥</div>
-                        <div class="card-content">
-                            <h4>Total Active Chats</h4>
-                            <div class="value" id="stat-active-chats">-</div>
-                            <small>Unique DMs</small>
-                        </div>
-                    </div>
-                    <div class="analytics-card">
-                        <div class="card-icon">💬</div>
-                        <div class="card-content">
-                            <h4>Avg Chat Length</h4>
-                            <div class="value" id="stat-avg-length">-</div>
-                            <small>Messages per contact</small>
-                        </div>
-                    </div>
-                    <div class="analytics-card">
-                        <div class="card-icon">📢</div>
-                        <div class="card-content">
-                            <h4>Ad Read Rate</h4>
-                            <div class="value" id="stat-read-rate">-</div>
-                            <small>Blue tick percentage</small>
-                        </div>
-                    </div>
-                    <div class="analytics-card">
-                        <div class="card-icon">🛡️</div>
-                        <div class="card-content">
-                            <h4>Avg Group Admins</h4>
-                            <div class="value" id="stat-avg-admins">-</div>
-                            <small>Per group</small>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Engagement Section -->
-            <section class="analytics-section">
-                <div class="section-header">
-                    <h3>🎯 Engagement Metrics</h3>
-                </div>
-
-                <div class="charts-row">
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h4>Engagement Funnel</h4>
-                            <span class="chart-info">Message delivery pipeline</span>
-                        </div>
-                        <canvas id="engagementChart"></canvas>
-                    </div>
-                    <div class="chart-container" id="campaigns-chart-container">
-                        <div class="chart-header">
-                            <h4>Top Performing Campaigns</h4>
-                            <span class="chart-info">Read vs Reply rates</span>
-                        </div>
-                        <canvas id="campaignChart"></canvas>
-                        <div class="empty-state" id="campaigns-empty" style="display: none;">
-                            <div class="empty-icon">📭</div>
-                            <p>No campaign data yet</p>
-                            <small>Start a marketing campaign to see performance metrics</small>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Groups Section -->
-            <section class="analytics-section">
-                <div class="section-header">
-                    <h3>🏆 Top Groups</h3>
-                    <span class="section-badge">By member count</span>
-                </div>
-
-                <div class="table-container">
-                    <table class="analytics-table">
-                        <thead>
-                            <tr>
-                                <th>Group Name</th>
-                                <th>Members</th>
-                                <th>Admins</th>
-                                <th>Bot Age</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="top-groups-body">
-                            <!-- Populated via JS -->
-                        </tbody>
-                    </table>
-                    <div class="empty-state" id="groups-empty" style="display: none;">
-                        <div class="empty-icon">👥</div>
-                        <p>No groups found</p>
-                        <small>Add the bot to WhatsApp groups to see analytics</small>
-                    </div>
-                </div>
-            </section>
-        </div>
-    </div>
 
     <!-- User Profile Page -->
     <div class="page" id="user-profile-page">
@@ -2628,7 +2765,6 @@
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
 
-    <script src="/app.js"></script>
 </body>
 
 </html>

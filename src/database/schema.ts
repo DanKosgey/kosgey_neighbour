@@ -242,7 +242,12 @@ export const marketingCampaigns = pgTable('marketing_campaigns', {
     visualStyle: text('visual_style').default('minimalist'),
     companyLink: text('company_link'),
 
-    settings: jsonb('settings'), // Flexible config
+    // Content source: 'existing' = use product from shop/career, 'ai' = AI-generated photos
+    contentSource: varchar('content_source', { length: 20 }).default('ai'),
+    selectedProductId: integer('selected_product_id'), // Single product when contentSource='existing'
+    selectedShopId: integer('selected_shop_id'), // Entire shop: rotate through all products (shop or career)
+
+    settings: jsonb('settings'), // { lastRotatedProductIndex: number } for shop rotation
     createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -302,6 +307,7 @@ export const products = pgTable('products', {
     price: integer('price').default(0), // Storing as simple number (or could be real)
     stock: integer('stock').default(0),
     imageUrl: text('image_url'), // Data URL or file path
+    imageUrls: jsonb('image_urls'), // Array of image URLs for career items (multiple photos)
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
 }, (table) => {

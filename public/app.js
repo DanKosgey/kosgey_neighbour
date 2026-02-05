@@ -109,13 +109,16 @@ function switchPage(page) {
     });
     document.getElementById(`${page}-page`).classList.add('active');
 
-    // Toggle sidebar for Analytics page (full-width layout)
-    const sidebar = document.querySelector('.sidebar');
-    if (page === 'analytics') {
-        sidebar.classList.add('hidden');
-    } else {
-        sidebar.classList.remove('hidden');
+    // Scroll main content to top so the active page shows from the top (e.g. Analytics)
+    const mainContent = document.querySelector('.main-content');
+    if (mainContent) {
+        mainContent.scrollTop = 0;
+        requestAnimationFrame(() => { mainContent.scrollTop = 0; });
     }
+
+    // Keep sidebar visible on all pages including Analytics
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) sidebar.classList.remove('hidden');
 
     currentPage = page;
 
@@ -337,12 +340,14 @@ async function loadChats() {
 
         if (chats.length === 0) {
             chatList.innerHTML = `
-                <div class="chat-empty">
-                    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-                        <circle cx="32" cy="32" r="32" fill="#f3f4f6"/>
-                        <path d="M20 28h24M20 36h16" stroke="#9ca3af" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                    <p>No conversations yet</p>
+                <div class="chat-empty" aria-live="polite">
+                    <div class="chat-empty-icon">
+                        <svg width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+                            <path d="M18 24h20M18 32h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-opacity="0.5"/>
+                        </svg>
+                    </div>
+                    <p class="chat-empty-title">No conversations yet</p>
+                    <p class="chat-empty-hint">New chats will appear here</p>
                 </div>
             `;
         } else {
@@ -353,8 +358,9 @@ async function loadChats() {
     } catch (error) {
         console.error('Failed to load chats:', error);
         chatList.innerHTML = `
-            <div class="chat-empty">
-                <p style="color: var(--danger);">Failed to load chats</p>
+            <div class="chat-empty chat-empty-error" aria-live="polite">
+                <p class="chat-empty-title" style="color: var(--danger);">Failed to load chats</p>
+                <p class="chat-empty-hint">Pull to refresh or try again later</p>
             </div>
         `;
     }
@@ -362,8 +368,11 @@ async function loadChats() {
 
 function renderChatList(chats) {
     const chatList = document.getElementById('chat-list');
-    chatList.innerHTML = chats.map(chat => `
-        <div class="chat-item" data-jid="${chat.phone}" onclick="selectChat('${chat.phone}')">
+    const currentJid = window._activeChatJid || '';
+    chatList.innerHTML = chats.map(chat => {
+        const isActive = chat.phone === currentJid;
+        return `
+        <div class="chat-item ${isActive ? 'chat-item-active' : ''}" data-jid="${chat.phone}" onclick="selectChat('${chat.phone}')" role="button" tabindex="0">
             <div class="chat-avatar">${(chat.name || 'Unknown').charAt(0).toUpperCase()}</div>
             <div class="chat-info">
                 <div class="chat-header">
@@ -373,69 +382,102 @@ function renderChatList(chats) {
                 <div class="chat-preview">${chat.lastMessage || 'No messages'}</div>
             </div>
         </div>
-    `).join('');
+    `}).join('');
 }
 
 async function selectChat(phone) {
+    window._activeChatJid = phone;
     const chatDetail = document.getElementById('chat-detail');
+    const chatList = document.getElementById('chat-list');
     chatDetail.innerHTML = `
-        <div style="padding: 2rem; width: 100%;">
-            <h3>Loading conversation...</h3>
+        <div class="chat-detail-loading">
+            <div class="chat-loading-spinner"></div>
+            <p>Loading conversation…</p>
         </div>
     `;
 
     try {
-        const response = await fetch(`${API_BASE}/api/chats/${phone}/messages`);
-        const messages = await response.json();
-
-        const contactResponse = await fetch(`${API_BASE}/api/contacts/${phone}`);
-        const contact = await contactResponse.json();
+        const [messagesRes, contactRes] = await Promise.all([
+            fetch(`${API_BASE}/api/chats/${phone}/messages`),
+            fetch(`${API_BASE}/api/contacts/${phone}`)
+        ]);
+        const messages = await messagesRes.json();
+        const contact = await contactRes.json();
 
         chatDetail.innerHTML = `
             <div class="chat-messages-container">
-                <div class="chat-messages-header">
-                    <button class="mobile-chat-back" onclick="closeChat()" style="display: none;">
+                <header class="chat-messages-header">
+                    <button type="button" class="mobile-chat-back" onclick="closeChat()" aria-label="Back to conversations" style="display: none;">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
                         </svg>
                     </button>
-                    <div class="chat-avatar">${(contact.name || 'Unknown').charAt(0).toUpperCase()}</div>
-                    <div>
-                        <h3>${contact.name || 'Unknown'}</h3>
-                        <p style="font-size: 0.875rem; color: var(--text-secondary);">${phone}</p>
+                    <div class="chat-messages-header-avatar">${(contact.name || 'Unknown').charAt(0).toUpperCase()}</div>
+                    <div class="chat-messages-header-info">
+                        <h3 class="chat-detail-name">${contact.name || 'Unknown'}</h3>
+                        <p class="chat-detail-phone">${phone}</p>
                     </div>
-                </div>
+                </header>
                 <div class="chat-messages-list">
                     ${messages.map(msg => `
                         <div class="message ${msg.role === 'agent' ? 'message-sent' : 'message-received'}">
-                            <div class="message-content">${msg.content}</div>
-                            <div class="message-time">${formatTime(new Date(msg.createdAt).getTime())}</div>
+                            <div class="message-content">${escapeHtml(msg.content)}</div>
+                            <span class="message-time">${formatTime(new Date(msg.createdAt).getTime())}</span>
                         </div>
                     `).join('')}
                 </div>
             </div>
         `;
 
-        // Mobile specific: Show detail view & back button
         if (window.innerWidth <= 768) {
             chatDetail.classList.add('active');
             const backBtn = chatDetail.querySelector('.mobile-chat-back');
             if (backBtn) backBtn.style.display = 'flex';
         }
+        // Re-render list to show active state
+        if (chatList && Array.isArray(chats) && chats.length) {
+            renderChatList(chats);
+        }
+        // Scroll messages to bottom
+        requestAnimationFrame(() => {
+            const list = chatDetail.querySelector('.chat-messages-list');
+            if (list) list.scrollTop = list.scrollHeight;
+        });
     } catch (error) {
         console.error('Failed to select chat:', error);
         chatDetail.innerHTML = `
-            <div style="padding: 2rem; color: var(--danger);">
-                <h3>Error loading chat</h3>
-                <p>${error.message}</p>
+            <div class="chat-detail-error">
+                <p class="chat-detail-error-title">Couldn't load conversation</p>
+                <p class="chat-detail-error-hint">${error.message}</p>
+                <button type="button" class="btn-refresh" onclick="selectChat('${phone}')">Try again</button>
             </div>
         `;
     }
 }
 
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 function closeChat() {
+    window._activeChatJid = '';
     const chatDetail = document.getElementById('chat-detail');
+    const chatList = document.getElementById('chat-list');
     chatDetail.classList.remove('active');
+    chatDetail.innerHTML = `
+        <div class="chat-detail-empty">
+            <div class="chat-detail-empty-icon">
+                <svg width="72" height="72" viewBox="0 0 72 72" fill="none" aria-hidden="true">
+                    <path d="M26 30h20M26 40h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-opacity="0.5"/>
+                </svg>
+            </div>
+            <h3 class="chat-detail-empty-title">Select a conversation</h3>
+            <p class="chat-detail-empty-hint">Choose a chat from the list to view messages</p>
+        </div>
+    `;
+    if (chatList && Array.isArray(chats) && chats.length) renderChatList(chats);
 }
 
 
@@ -801,15 +843,28 @@ document.getElementById('chat-search')?.addEventListener('input', (e) => {
     filterChats(query);
 });
 
+// Chat list: keyboard support (Enter/Space to open chat)
+document.getElementById('chat-list')?.addEventListener('keydown', (e) => {
+    const item = e.target.closest('.chat-item[data-jid]');
+    if (!item || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    selectChat(item.getAttribute('data-jid'));
+});
+
 document.getElementById('contact-search')?.addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     filterContacts(query);
 });
 
 function filterChats(query) {
+    if (!query.trim()) {
+        renderChatList(chats);
+        return;
+    }
+    const q = query.toLowerCase();
     const filtered = chats.filter(chat =>
-        chat.name.toLowerCase().includes(query) ||
-        chat.lastMessage.toLowerCase().includes(query)
+        (chat.name || '').toLowerCase().includes(q) ||
+        (chat.lastMessage || '').toLowerCase().includes(q)
     );
     renderChatList(filtered);
 }
@@ -1505,11 +1560,61 @@ window.refreshMiniGroups = async function () {
 window.openSimpleCampaignModal = function () {
     document.getElementById('mini-camp-id').value = '';
     document.getElementById('mini-camp-name').value = '';
+    document.getElementById('content-source-ai').checked = true;
+    toggleContentSourceUI('ai');
+    loadCampaignProductOptions();
     document.getElementById('simple-campaign-modal').classList.add('active');
 };
 
 window.closeSimpleCampaignModal = function () {
     document.getElementById('simple-campaign-modal').classList.remove('active');
+};
+
+// Content source toggle: show/hide product selector
+window.toggleContentSourceUI = function (source) {
+    const selector = document.getElementById('campaign-product-selector');
+    const productSelect = document.getElementById('mini-selected-product');
+    if (source === 'existing') {
+        if (selector) selector.style.display = 'block';
+        if (productSelect) productSelect.required = true;
+    } else {
+        if (selector) selector.style.display = 'none';
+        if (productSelect) {
+            productSelect.required = false;
+            productSelect.value = '';
+        }
+    }
+};
+
+// Load shops and products for campaign product selector
+window.loadCampaignProductOptions = async function () {
+    const select = document.getElementById('mini-selected-product');
+    if (!select) return;
+    select.innerHTML = '<option value="">Loading...</option>';
+    try {
+        const res = await fetch(`${API_BASE}/api/shops`);
+        const shops = await res.json();
+        if (!Array.isArray(shops) || shops.length === 0) {
+            select.innerHTML = '<option value="">No shops or portfolios yet</option>';
+            return;
+        }
+        let html = '<option value="">-- Select what to promote --</option>';
+        for (const shop of shops) {
+            const products = shop.products || [];
+            const typeLabel = shop.type === 'career' ? 'Portfolio' : 'Shop';
+            const itemLabel = shop.type === 'career' ? 'items' : 'products';
+            if (products.length > 0) {
+                html += `<option value="shop:${shop.id}">${shop.emoji || '📦'} ${shop.name} — Rotate all ${products.length} ${itemLabel}</option>`;
+                for (const p of products) {
+                    html += `<option value="product:${p.id}">${shop.emoji || '📦'} ${shop.name} → ${p.name}</option>`;
+                }
+            }
+        }
+        select.innerHTML = html || '<option value="">No products/items in shops yet</option>';
+    } catch (e) {
+        console.error(e);
+        select.innerHTML = '<option value="">Error loading shops</option>';
+    }
 };
 
 // Submit Campaign
@@ -1523,6 +1628,18 @@ window.submitMiniCampaign = async function () {
     if (!name) {
         showToast("Please enter a campaign name", "error");
         return;
+    }
+
+    const contentSource = document.querySelector('input[name="content-source"]:checked')?.value || 'ai';
+    const selectionValue = contentSource === 'existing' ? document.getElementById('mini-selected-product')?.value : null;
+    if (contentSource === 'existing' && !selectionValue) {
+        showToast("Please select a shop or item to promote", "error");
+        return;
+    }
+    let selectedProductId = null, selectedShopId = null;
+    if (selectionValue) {
+        if (selectionValue.startsWith('shop:')) selectedShopId = parseInt(selectionValue.slice(5), 10);
+        else if (selectionValue.startsWith('product:')) selectedProductId = parseInt(selectionValue.slice(8), 10);
     }
 
     btn.disabled = true;
@@ -1551,7 +1668,9 @@ window.submitMiniCampaign = async function () {
         uniqueSellingPoint: document.getElementById('mini-usp').value,
         brandVoice: document.getElementById('mini-voice').value,
         companyLink: document.getElementById('mini-company-link').value || null,
-
+        contentSource: contentSource,
+        selectedProductId: selectedProductId,
+        selectedShopId: selectedShopId
     };
 
     // Add targetAudience text if element exists (I might add it back)
@@ -1622,13 +1741,26 @@ window.submitMiniCampaign = async function () {
 
 // Edit Campaign
 // Edit Campaign
-window.editMiniCampaign = function (id) {
+window.editMiniCampaign = async function (id) {
     const campaign = window.allCampaigns.find(c => c.id === id);
     if (!campaign) return;
 
     // Populate fields
     document.getElementById('mini-camp-id').value = campaign.id;
     document.getElementById('mini-camp-name').value = campaign.name;
+
+    // Content source and product/shop selection
+    const contentSource = campaign.contentSource || 'ai';
+    document.getElementById('content-source-existing').checked = contentSource === 'existing';
+    document.getElementById('content-source-ai').checked = contentSource === 'ai';
+    await loadCampaignProductOptions();
+    const productSelect = document.getElementById('mini-selected-product');
+    if (productSelect && contentSource === 'existing') {
+        if (campaign.selectedShopId) productSelect.value = 'shop:' + campaign.selectedShopId;
+        else if (campaign.selectedProductId) productSelect.value = 'product:' + campaign.selectedProductId;
+    }
+    toggleContentSourceUI(contentSource);
+
     document.getElementById('mini-product-info').value = campaign.productInfo || '';
     document.getElementById('mini-usp').value = campaign.uniqueSellingPoint || '';
     document.getElementById('mini-voice').value = campaign.brandVoice || 'Professional';
@@ -1980,6 +2112,9 @@ window.openSimpleCampaignModal = function () {
     wizardCurrentStep = 1;
     document.getElementById('mini-camp-id').value = '';
     document.getElementById('mini-camp-name').value = '';
+    document.getElementById('content-source-ai').checked = true;
+    toggleContentSourceUI('ai');
+    loadCampaignProductOptions();
     // Reset Title
     const titleEl = document.querySelector('.marketing-modal-title');
     if (titleEl) titleEl.textContent = "Create New Campaign";
@@ -2153,6 +2288,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let currentShopId = null;
 let currentImageData = null;
+let currentImageUrls = []; // For career: multiple photos
 
 // Expose functions to window
 
@@ -2399,19 +2535,31 @@ window.openShop = async function (shopId) {
         const descLabel = document.getElementById('productDescLabel');
         const priceStockGroup = document.getElementById('productPriceStockGroup');
 
+        const imageLabel = document.getElementById('productImageLabel');
+        const imageInput = document.getElementById('imageInput');
+        const careerMultiHint = document.getElementById('careerMultiPhotosHint');
         if (isCareer) {
             if (addTitle) addTitle.textContent = 'Add Skill or Project';
             if (submitBtn) submitBtn.textContent = 'Add to Portfolio';
             if (nameLabel) nameLabel.textContent = 'Skill / Project Name';
             if (descLabel) descLabel.textContent = 'Description / Details';
             if (priceStockGroup) priceStockGroup.style.display = 'none';
+            if (imageLabel) imageLabel.textContent = 'Photos (add multiple for ad rotation)';
+            if (imageInput) imageInput.setAttribute('multiple', 'multiple');
+            if (careerMultiHint) careerMultiHint.style.display = 'block';
         } else {
             if (addTitle) addTitle.textContent = 'Add New Product';
             if (submitBtn) submitBtn.textContent = 'Add Product';
             if (nameLabel) nameLabel.textContent = 'Product Name';
             if (descLabel) descLabel.textContent = 'Description';
+            if (imageLabel) imageLabel.textContent = 'Product Image';
+            if (imageInput) imageInput.removeAttribute('multiple');
+            if (careerMultiHint) careerMultiHint.style.display = 'none';
             if (priceStockGroup) priceStockGroup.style.display = 'grid';
         }
+
+        // Reset image state when switching shops
+        removeImage();
 
         // Store type on the modal for later use
         window.currentShopType = shop.type;
@@ -2463,7 +2611,7 @@ window.renderProducts = function (products, shopType = 'shop') {
             return `
                 <div class="product-card glass-panel" style="animation: fadeIn 0.6s ease ${index * 0.1}s both; overflow: hidden; border-radius: 16px; border: 1px solid var(--glass-border); transition: transform 0.3s ease, box-shadow 0.3s ease; display: flex; flex-direction: column;">
                     <div style="position: relative; padding-top: 60%; overflow: hidden; background: rgba(0,0,0,0.2);">
-                        <img src="${product.imageUrl || product.image || 'https://placehold.co/400x300?text=No+Image'}" alt="${product.name}" class="product-image" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease;">
+                        <img src="${product.imageUrl || (product.imageUrls && product.imageUrls[0]) || product.image || 'https://placehold.co/400x300?text=No+Image'}" alt="${product.name}" class="product-image" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease;">
                     </div>
                     <div class="product-info" style="padding: 1.25rem; flex: 1; display: flex; flex-direction: column;">
                         <div class="product-name" style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; line-height: 1.3;">${product.name}</div>
@@ -2478,30 +2626,41 @@ window.renderProducts = function (products, shopType = 'shop') {
 };
 
 window.handleImageSelect = function (e) {
-    const file = e.target.files[0];
-    if (file) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    currentImageUrls = [];
+    const loadNext = (i) => {
+        if (i >= files.length) {
+            currentImageData = currentImageUrls[0] || null;
+            updateImagePreview(currentImageUrls[0]);
+            return;
+        }
         const reader = new FileReader();
-        reader.onload = (e) => {
-            currentImageData = e.target.result;
-            const previewImage = document.getElementById('imagePreview');
-            const imageUploadArea = document.getElementById('imageUploadArea');
-            const removeImageBtn = document.getElementById('removeImageBtn');
-            const placeholder = document.getElementById('uploadPlaceholder');
-
-            previewImage.src = currentImageData;
-            previewImage.classList.add('visible');
-            imageUploadArea.classList.add('has-image');
-
-            if (placeholder) placeholder.style.display = 'none';
-
-            removeImageBtn.style.display = 'block';
+        reader.onload = (ev) => {
+            currentImageUrls.push(ev.target.result);
+            loadNext(i + 1);
         };
-        reader.readAsDataURL(file);
-    }
+        reader.readAsDataURL(files[i]);
+    };
+    loadNext(0);
 };
+function updateImagePreview(src) {
+    const previewImage = document.getElementById('imagePreview');
+    const imageUploadArea = document.getElementById('imageUploadArea');
+    const removeImageBtn = document.getElementById('removeImageBtn');
+    const placeholder = document.getElementById('uploadPlaceholder');
+    if (!src) return;
+    previewImage.src = src;
+    previewImage.classList.add('visible');
+    previewImage.style.display = 'block';
+    imageUploadArea.classList.add('has-image');
+    if (placeholder) placeholder.style.display = 'none';
+    removeImageBtn.style.display = 'block';
+}
 
 window.removeImage = function () {
     currentImageData = null;
+    currentImageUrls = [];
     const previewImage = document.getElementById('imagePreview');
     const imageUploadArea = document.getElementById('imageUploadArea');
     const removeImageBtn = document.getElementById('removeImageBtn');
@@ -2536,12 +2695,14 @@ window.handleAddProduct = async function (e) {
     const price = priceInput ? parseFloat(priceInput) : 0;
     const stock = stockInput ? parseInt(stockInput) : 0;
 
+    const placeholderImg = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23f3f4f6" width="400" height="300"/%3E%3Ctext fill="%239ca3af" font-family="sans-serif" font-size="20" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E';
     const productData = {
         name: document.getElementById('productName').value,
         price: price,
         stock: stock,
         description: document.getElementById('productDesc').value,
-        image: currentImageData || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23f3f4f6" width="400" height="300"/%3E%3Ctext fill="%239ca3af" font-family="sans-serif" font-size="20" x="50%25" y="50%25" text-anchor="middle" dominant-baseline="middle"%3ENo Image%3C/text%3E%3C/svg%3E'
+        image: currentImageData || (currentImageUrls && currentImageUrls[0]) || placeholderImg,
+        imageUrls: (currentImageUrls && currentImageUrls.length > 0) ? currentImageUrls : undefined
     };
 
     try {
@@ -2597,49 +2758,383 @@ window.deleteProduct = async function (productId) {
 
 let engagementChart = null;
 let campaignChart = null;
+let volumeChart = null;
+let peakHoursChart = null;
+let messageTypesChart = null;
+let inboundOutboundChart = null;
 
 async function loadAnalytics() {
-    console.log('🔄 Loading Analytics Data... (Debug Mode)');
+    console.log('🔄 Loading Analytics Dashboard...');
     try {
-        // 1. Fetch Group Analytics
-        console.log('📡 Fetching /api/analytics/groups...');
-        const groupRes = await fetch(`${API_BASE}/api/analytics/groups`);
-        if (!groupRes.ok) {
-            const errText = await groupRes.text();
-            console.error('❌ Group Analytics Failed:', groupRes.status, errText);
-            throw new Error(`Failed to fetch group stats: ${groupRes.status}`);
-        }
-        const groupStats = await groupRes.json();
-        console.log('✅ Group Stats Received:', groupStats);
+        const res = await fetch(`${API_BASE}/api/analytics/dashboard`);
+        if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
+        const data = await res.json();
 
-        // 2. Fetch Engagement Analytics
-        console.log('📡 Fetching /api/analytics/engagement...');
-        const engageRes = await fetch(`${API_BASE}/api/analytics/engagement`);
-        if (!engageRes.ok) {
-            const errText = await engageRes.text();
-            console.error('❌ Engagement Analytics Failed:', engageRes.status, errText);
-            throw new Error(`Failed to fetch engagement stats: ${engageRes.status}`);
-        }
-        const engagementStats = await engageRes.json();
-        console.log('✅ Engagement Stats Received:', engagementStats);
+        const { overview, groupStats, messageVolumeByDay, peakActivityByHour, messageTypes, inboundOutbound, topContactsByVolume, topCampaigns } = data;
+        const groups = (groupStats?.largestGroups || []);
 
-        // 3. Update UI
-        console.log('🎨 Updating Analytics UI...');
-        // Update KPI Cards
-        document.getElementById('stat-active-chats').textContent = engagementStats.overview.activeChats || '0';
-        document.getElementById('stat-avg-length').textContent = (engagementStats.overview.avgChatLength || '0');
-        document.getElementById('stat-read-rate').textContent = (engagementStats.overview.readRate || '0') + '%';
-        document.getElementById('stat-avg-admins').textContent = groupStats.avgAdmins.toFixed(1);
+        // KPI Cards
+        setEl('stat-total-messages', overview?.totalMessages ?? 0);
+        setEl('stat-active-chats', overview?.activeChats ?? 0);
+        setEl('stat-response-time', formatResponseTime(overview?.avgResponseTimeSec));
+        setEl('stat-new-contacts', overview?.newContactsLast7d ?? 0);
+        setEl('stat-read-rate', (overview?.readRate ?? 0) + '%');
+        setEl('stat-queue-pending', overview?.queuePending ?? 0);
 
-        // Update Tables & Charts
-        renderTopGroupsTable(groupStats.largestGroups);
-        renderEngagementChart(engagementStats.overview);
-        renderCampaignChart(engagementStats.topCampaigns);
+        // Charts
+        renderVolumeChart(messageVolumeByDay || []);
+        renderPeakHoursChart(peakActivityByHour || []);
+        renderMessageTypesChart(messageTypes || []);
+        renderInboundOutboundChart(inboundOutbound || { inbound: 0, outbound: 0 });
+        renderEngagementChart(overview || { delivered: 0, read: 0, replies: 0 });
+        renderCampaignChart(topCampaigns || []);
 
+        // Tables
+        renderTopContactsTable(topContactsByVolume || []);
+        renderTopGroupsTable(groups);
+
+        // Insights
+        renderInsights(data);
+
+        // Empty states - show table when data exists, empty state when not
+        toggleTableAndEmpty('contacts-table-wrapper', 'top-contacts-empty', !!(topContactsByVolume?.length));
+        toggleTableAndEmpty('groups-table-wrapper', 'groups-empty', !!(groups.length));
+        toggleEmpty('campaigns-empty', !(topCampaigns?.length));
     } catch (error) {
         console.error('Failed to load analytics:', error);
         showToast('Failed to load analytics data', 'error');
     }
+}
+
+function setEl(id, val) {
+    const el = document.getElementById(id);
+    if (el) {
+        // Format large numbers
+        if (typeof val === 'number' && val >= 1000) {
+            el.textContent = val >= 1000000 
+                ? (val / 1000000).toFixed(1) + 'M'
+                : val >= 1000 
+                    ? (val / 1000).toFixed(1) + 'K'
+                    : String(val);
+        } else {
+            el.textContent = String(val);
+        }
+    }
+}
+
+function formatResponseTime(sec) {
+    if (!sec || sec < 0) return '-';
+    if (sec < 60) return sec + 's';
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return s ? m + 'm ' + s + 's' : m + 'm';
+}
+
+function toggleEmpty(id, show) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = show ? 'block' : 'none';
+}
+
+function toggleTableAndEmpty(tableWrapperId, emptyStateId, hasData) {
+    const tableWrapper = document.getElementById(tableWrapperId);
+    const emptyState = document.getElementById(emptyStateId);
+    if (tableWrapper) tableWrapper.style.display = hasData ? 'block' : 'none';
+    if (emptyState) emptyState.style.display = hasData ? 'none' : 'flex';
+}
+
+function renderInsights(data) {
+    const { messageVolumeByDay = [], peakActivityByHour = [], overview = {}, inboundOutbound = {} } = data;
+    
+    // Volume Insights
+    const peakHour = peakActivityByHour.reduce((best, h) => (h.count > (best?.count || 0) ? h : best), null);
+    const totalVol = messageVolumeByDay.reduce((s, d) => s + (d.count || 0), 0);
+    const avgPerDay = messageVolumeByDay.length ? Math.round(totalVol / messageVolumeByDay.length) : 0;
+    const recentTrend = messageVolumeByDay.length >= 2 
+        ? messageVolumeByDay.slice(-2).reduce((sum, d) => sum + (d.count || 0), 0) / 2
+        : 0;
+    const trendDirection = recentTrend > avgPerDay ? 'increasing' : recentTrend < avgPerDay ? 'decreasing' : 'stable';
+    const growthRate = avgPerDay > 0 ? (((recentTrend - avgPerDay) / avgPerDay) * 100).toFixed(1) : 0;
+    
+    const volumeInsight = totalVol > 0
+        ? `📊 Volume Analysis: ${overview.totalMessages || 0} total messages (${avgPerDay}/day avg). Trend is ${trendDirection}${Math.abs(growthRate) > 5 ? ` (${growthRate > 0 ? '+' : ''}${growthRate}%)` : ''}. ${overview.newContactsLast7d > 0 ? `${overview.newContactsLast7d} new contacts acquired.` : ''}`
+        : '📊 Start chatting to see message volume trends and growth patterns.';
+
+    // Peak Activity Insights
+    const peakHours = peakActivityByHour
+        .map((h, i) => ({ hour: i, count: h.count || 0 }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
+    const peakWindow = peakHours.length > 0 && peakHours[0].count > 0
+        ? `Peak activity window: ${peakHours.map(h => `${h.hour}:00`).join(', ')} UTC. ${peakHours[0].count} messages during peak hour. Optimal campaign timing: ${peakHours[0].hour}:00-${(peakHours[0].hour + 2) % 24}:00 UTC.`
+        : '⏰ Activity patterns will emerge as message volume increases. Monitor hourly distribution for optimal engagement windows.';
+
+    // Engagement Insights
+    const delivered = overview.delivered || 0;
+    const read = overview.read || 0;
+    const replies = overview.replies || 0;
+    const readRate = delivered > 0 ? ((read / delivered) * 100).toFixed(1) : 0;
+    const replyRate = delivered > 0 ? ((replies / delivered) * 100).toFixed(1) : 0;
+    const conversionRate = read > 0 ? ((replies / read) * 100).toFixed(1) : 0;
+    
+    const inboundRatio = (inboundOutbound.inbound || 0) / Math.max((inboundOutbound.inbound || 0) + (inboundOutbound.outbound || 0), 1);
+    const balanceInsight = inboundRatio > 0.6 ? 'Users are highly engaged' : inboundRatio < 0.4 ? 'Agent is proactive' : 'Balanced conversation flow';
+    
+    const engagementInsight = delivered > 0
+        ? `🎯 Engagement Metrics: Read rate ${readRate}% (${read}/${delivered}), Reply rate ${replyRate}% (${replies}/${delivered}), Conversion ${conversionRate}%. ${overview.avgResponseTimeSec > 0 ? `Response time: ${formatResponseTime(overview.avgResponseTimeSec)}. ` : ''}${balanceInsight}.`
+        : '🎯 Run marketing campaigns to track engagement funnel: Delivered → Read → Replied. Monitor conversion rates for optimization.';
+
+    setEl('insight-volume', volumeInsight);
+    setEl('insight-peak', peakWindow);
+    setEl('insight-engagement', engagementInsight);
+}
+
+function renderTopContactsTable(contacts) {
+    const tbody = document.getElementById('top-contacts-body');
+    if (!tbody) return;
+    
+    const contactList = (contacts || []).slice(0, 10); // Limit to top 10
+    const totalMessages = contactList.reduce((sum, c) => sum + (c.messageCount || 0), 0);
+    
+    tbody.innerHTML = contactList.map((c, idx) => {
+        const percentage = totalMessages > 0 ? ((c.messageCount / totalMessages) * 100).toFixed(1) : 0;
+        return `
+        <tr>
+            <td>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="color: var(--text-secondary); font-size: 0.75rem;">#${idx + 1}</span>
+                    <span>${escapeHtml(c.name || c.phone || 'Unknown')}</span>
+                </div>
+            </td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-weight: 600;">${c.messageCount || 0}</span>
+                    <span style="color: var(--text-secondary); font-size: 0.7rem;">(${percentage}%)</span>
+                </div>
+            </td>
+        </tr>
+    `}).join('');
+}
+
+function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function renderVolumeChart(volumeByDay) {
+    const ctx = document.getElementById('volumeChart')?.getContext('2d');
+    if (!ctx) return;
+    if (volumeChart) volumeChart.destroy();
+    
+    const labels = volumeByDay.map(d => {
+        const dte = d.date ? new Date(d.date + 'T00:00:00') : null;
+        return dte ? dte.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : d.date || '';
+    });
+    const counts = volumeByDay.map(d => d.count || 0);
+    const maxCount = Math.max(...counts, 1);
+    
+    volumeChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels.length ? labels : ['No data'],
+            datasets: [{
+                label: 'Messages',
+                data: counts.length ? counts : [0],
+                backgroundColor: counts.map(c => {
+                    const intensity = c / maxCount;
+                    return `rgba(99, 102, 241, ${0.4 + intensity * 0.4})`;
+                }),
+                borderColor: 'rgba(99, 102, 241, 1)',
+                borderWidth: 2,
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 10,
+                    bottom: 10,
+                    left: 10,
+                    right: 10
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        afterLabel: function(context) {
+                            if (context.dataIndex > 0 && counts[context.dataIndex - 1] > 0) {
+                                const change = counts[context.dataIndex] - counts[context.dataIndex - 1];
+                                const changePercent = ((change / counts[context.dataIndex - 1]) * 100).toFixed(1);
+                                return change !== 0 ? `${change > 0 ? '+' : ''}${changePercent}% vs previous day` : 'No change';
+                            }
+                            return '';
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: {
+                        color: '#9ca3af',
+                        stepSize: maxCount > 20 ? Math.ceil(maxCount / 5) : 1,
+                        callback: function(value) {
+                            return value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value;
+                        }
+                    }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        color: '#9ca3af',
+                        maxRotation: 45,
+                        minRotation: 0,
+                        font: { size: 10 }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderPeakHoursChart(peakByHour) {
+    const ctx = document.getElementById('peakHoursChart')?.getContext('2d');
+    if (!ctx) return;
+    if (peakHoursChart) peakHoursChart.destroy();
+    
+    const hourData = peakByHour.length ? peakByHour : Array.from({ length: 24 }, (_, i) => ({ hour: i, count: 0 }));
+    const labels = hourData.map(h => {
+        const hour = h.hour;
+        if (hour === 0) return '00:00';
+        if (hour % 3 === 0 || hour === 23) return (hour < 10 ? '0' : '') + hour + ':00';
+        return '';
+    });
+    const counts = hourData.map(h => h.count || 0);
+    const maxCount = Math.max(...counts, 1);
+    
+    peakHoursChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: hourData.map(h => h.hour),
+            datasets: [{
+                label: 'Messages',
+                data: counts,
+                backgroundColor: counts.map(c => {
+                    const intensity = c / maxCount;
+                    return `rgba(6, 182, 212, ${0.3 + intensity * 0.5})`;
+                }),
+                borderColor: 'rgba(6, 182, 212, 0.8)',
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 10,
+                    bottom: 10,
+                    left: 5,
+                    right: 5
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            const hour = context[0].label;
+                            return `${hour < 10 ? '0' : ''}${hour}:00 UTC`;
+                        },
+                        label: function(context) {
+                            return `${context.parsed.y} messages`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: {
+                        color: '#9ca3af',
+                        stepSize: maxCount > 10 ? Math.ceil(maxCount / 5) : 1
+                    }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        color: '#9ca3af',
+                        callback: function(value, index) {
+                            const hour = parseInt(value);
+                            if (hour === 0 || hour % 3 === 0 || hour === 23) {
+                                return (hour < 10 ? '0' : '') + hour + ':00';
+                            }
+                            return '';
+                        },
+                        maxRotation: 0,
+                        font: { size: 9 }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderMessageTypesChart(types) {
+    const ctx = document.getElementById('messageTypesChart')?.getContext('2d');
+    if (!ctx) return;
+    if (messageTypesChart) messageTypesChart.destroy();
+    const labels = types.length ? types.map(t => (t.type || 'text').charAt(0).toUpperCase() + (t.type || 'text').slice(1)) : ['Text'];
+    const counts = types.length ? types.map(t => t.count || 0) : [0];
+    const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#06b6d4'];
+    messageTypesChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{
+                data: counts,
+                backgroundColor: colors.slice(0, labels.length),
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af' } } },
+            cutout: '65%'
+        }
+    });
+}
+
+function renderInboundOutboundChart(io) {
+    const ctx = document.getElementById('inboundOutboundChart')?.getContext('2d');
+    if (!ctx) return;
+    if (inboundOutboundChart) inboundOutboundChart.destroy();
+    const inbound = io.inbound ?? 0;
+    const outbound = io.outbound ?? 0;
+    inboundOutboundChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Inbound (Users)', 'Outbound (Agent)'],
+            datasets: [{
+                data: [inbound, outbound],
+                backgroundColor: ['#10b981', '#6366f1'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af' } } },
+            cutout: '65%'
+        }
+    });
 }
 
 
@@ -2769,70 +3264,115 @@ function formatPhone(phone) {
     return phone.split('@')[0];
 }
 
-// Update Render Table to include button
 function renderTopGroupsTable(groups) {
     const tbody = document.getElementById('top-groups-body');
     if (!tbody) return;
 
-    tbody.innerHTML = groups.map(g => `
+    tbody.innerHTML = (groups || []).map(g => {
+        const joinDate = g.botJoinedAt ? new Date(g.botJoinedAt) : new Date();
+        const diffDays = Math.ceil((Date.now() - joinDate) / (1000 * 60 * 60 * 24));
+        const botAge = diffDays + (diffDays === 1 ? ' Day' : ' Days');
+        return `
         <tr>
             <td class="group-name">
-                <div class="avatar-sm">${g.subject.substring(0, 2).toUpperCase()}</div>
+                <div class="avatar-sm">${(g.subject || '??').substring(0, 2).toUpperCase()}</div>
                 <div>
-                    <div class="fw-bold">${g.subject}</div>
-                    <small class="text-muted">${g.jid.split('@')[0]}</small>
+                    <div class="fw-bold">${escapeHtml(g.subject || 'Unknown')}</div>
+                    <small class="text-muted">${(g.jid || '').split('@')[0]}</small>
                 </div>
             </td>
-            <td>${g.totalMembers}</td>
-            <td>${g.adminsCount}</td>
+            <td>${g.totalMembers ?? 0}</td>
+            <td>${g.adminsCount ?? 0}</td>
+            <td>${botAge}</td>
             <td style="text-align: right;">
-                <button class="btn-icon" onclick="openGroupAnalytics('${g.jid}')" title="Analyze Group">
+                <button class="btn-icon" onclick="openGroupAnalytics('${(g.jid || '').replace(/'/g, "\\'")}')" title="Analyze Group">
                     <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                     </svg>
                 </button>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 function renderEngagementChart(overview) {
     const ctx = document.getElementById('engagementChart')?.getContext('2d');
     if (!ctx) return;
 
-    if (engagementChart) {
-        engagementChart.destroy();
-    }
+    if (engagementChart) engagementChart.destroy();
+
+    const delivered = overview.delivered || 0;
+    const read = overview.read || 0;
+    const replies = overview.replies || 0;
 
     engagementChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: ['Delivered', 'Read', 'Replied'],
             datasets: [{
-                label: 'Messages',
-                data: [overview.delivered, overview.read, overview.replies],
+                label: 'Count',
+                data: [delivered, read, replies],
                 backgroundColor: [
-                    'rgba(59, 130, 246, 0.6)', // Blue
-                    'rgba(16, 185, 129, 0.6)', // Green
-                    'rgba(139, 92, 246, 0.6)'  // Purple
+                    'rgba(59, 130, 246, 0.7)',
+                    'rgba(16, 185, 129, 0.7)',
+                    'rgba(139, 92, 246, 0.7)'
                 ],
                 borderColor: [
                     'rgba(59, 130, 246, 1)',
                     'rgba(16, 185, 129, 1)',
                     'rgba(139, 92, 246, 1)'
                 ],
-                borderWidth: 1
+                borderWidth: 2,
+                borderRadius: 6
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 10,
+                    bottom: 10,
+                    left: 10,
+                    right: 10
+                }
+            },
             plugins: {
-                legend: { display: false }
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        afterLabel: function(context) {
+                            const value = context.parsed.y;
+                            const total = delivered;
+                            if (context.dataIndex === 0) return '';
+                            if (context.dataIndex === 1 && total > 0) {
+                                const rate = ((value / total) * 100).toFixed(1);
+                                return `Read Rate: ${rate}%`;
+                            }
+                            if (context.dataIndex === 2 && total > 0) {
+                                const rate = ((value / total) * 100).toFixed(1);
+                                return `Reply Rate: ${rate}%`;
+                            }
+                            return '';
+                        }
+                    }
+                }
             },
             scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } },
-                x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: {
+                        color: '#9ca3af',
+                        callback: function(value) {
+                            return value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value;
+                        }
+                    }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#9ca3af', font: { size: 11 } }
+                }
             }
         }
     });
@@ -2842,46 +3382,99 @@ function renderCampaignChart(campaigns) {
     const ctx = document.getElementById('campaignChart')?.getContext('2d');
     if (!ctx) return;
 
-    if (campaignChart) {
-        campaignChart.destroy();
+    if (campaignChart) campaignChart.destroy();
+
+    const list = Array.isArray(campaigns) ? campaigns : [];
+    const emptyState = document.getElementById('campaigns-empty');
+    
+    if (emptyState) {
+        emptyState.style.display = list.length === 0 ? 'block' : 'none';
     }
 
-    const labels = campaigns.map(c => c.name);
-    const readData = campaigns.map(c => c.reads);
-    const replyData = campaigns.map(c => c.replies);
+    if (list.length === 0) return;
+
+    const labels = list.map(c => (c.name || 'Campaign').substring(0, 20));
+    const readData = list.map(c => Number(c.reads) || 0);
+    const replyData = list.map(c => Number(c.replies) || 0);
 
     campaignChart = new Chart(ctx, {
-        type: 'line',
+        type: 'bar',
         data: {
             labels: labels,
             datasets: [
                 {
                     label: 'Reads',
                     data: readData,
+                    backgroundColor: 'rgba(16, 185, 129, 0.7)',
                     borderColor: 'rgba(16, 185, 129, 1)',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    tension: 0.4,
-                    fill: true
+                    borderWidth: 2,
+                    borderRadius: 6
                 },
                 {
                     label: 'Replies',
                     data: replyData,
+                    backgroundColor: 'rgba(139, 92, 246, 0.7)',
                     borderColor: 'rgba(139, 92, 246, 1)',
-                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                    tension: 0.4,
-                    fill: true
+                    borderWidth: 2,
+                    borderRadius: 6
                 }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 10,
+                    bottom: 10,
+                    left: 10,
+                    right: 10
+                }
+            },
             plugins: {
-                legend: { labels: { color: '#9ca3af' } }
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: '#9ca3af',
+                        font: { size: 12 },
+                        padding: 15,
+                        usePointStyle: true
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        footer: function(tooltipItems) {
+                            const reads = tooltipItems[0].parsed.y;
+                            const replies = tooltipItems[1]?.parsed.y || 0;
+                            if (reads > 0) {
+                                const conversionRate = ((replies / reads) * 100).toFixed(1);
+                                return `Conversion: ${conversionRate}%`;
+                            }
+                            return '';
+                        }
+                    }
+                }
             },
             scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } },
-                x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } }
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: {
+                        color: '#9ca3af',
+                        callback: function(value) {
+                            return value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value;
+                        }
+                    }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: {
+                        color: '#9ca3af',
+                        maxRotation: 45,
+                        minRotation: 0,
+                        font: { size: 10 }
+                    }
+                }
             }
         }
     });

@@ -110,11 +110,15 @@ export class MarketingService {
             uniqueSellingPoint?: string,
             brandVoice?: string,
             businessDescription?: string,
-            companyLink?: string
+            companyLink?: string,
+            contentSource?: string,
+            selectedProductId?: number | null,
+            selectedShopId?: number | null
         }
     ): Promise<string> {
-        if (!await this.hasProfile() && (!businessContext || !businessContext.productInfo)) {
-            return "❌ Please complete the onboarding first or provide campaign details.";
+        const hasProductContext = businessContext?.productInfo || (businessContext?.contentSource === 'existing' && (businessContext?.selectedProductId || businessContext?.selectedShopId));
+        if (!await this.hasProfile() && (!businessContext || !hasProductContext)) {
+            return "❌ Please complete the onboarding first or provide campaign details (product info or select an item from shops).";
         }
 
         // Check for duplicates
@@ -150,7 +154,10 @@ export class MarketingService {
             targetAudience: businessContext?.targetAudience,
             uniqueSellingPoint: businessContext?.uniqueSellingPoint,
             brandVoice: businessContext?.brandVoice,
-            companyLink: businessContext?.companyLink
+            companyLink: businessContext?.companyLink,
+            contentSource: businessContext?.contentSource || 'ai',
+            selectedProductId: businessContext?.selectedProductId ?? null,
+            selectedShopId: businessContext?.selectedShopId ?? null
         }).returning();
 
         return `✅ Campaign '${name}' created! ID: ${campaign.id}. Use 'view schedule' to see upcoming posts.`;
@@ -170,7 +177,10 @@ export class MarketingService {
         targetAudience?: string,
         uniqueSellingPoint?: string,
         brandVoice?: string,
-        targetGroups?: any
+        targetGroups?: any,
+        contentSource?: string,
+        selectedProductId?: number | null,
+        selectedShopId?: number | null
     }): Promise<void> {
         // If name is being updated, check for duplicates
         if (updates.name) {

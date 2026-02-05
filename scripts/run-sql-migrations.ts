@@ -39,6 +39,38 @@ async function runSqlMigrations() {
             console.error('⚠️ Migration 003 warning:', e.message);
         }
 
+        // Migration 004: Add Content Source (existing vs AI)
+        console.log('📋 Running Migration 004 (Content Source)...');
+        try {
+            await sql`
+                ALTER TABLE marketing_campaigns 
+                ADD COLUMN IF NOT EXISTS content_source VARCHAR(20) DEFAULT 'ai';
+            `;
+            await sql`
+                ALTER TABLE marketing_campaigns 
+                ADD COLUMN IF NOT EXISTS selected_product_id INTEGER;
+            `;
+            await sql`
+                ALTER TABLE marketing_campaigns 
+                ADD COLUMN IF NOT EXISTS selected_shop_id INTEGER;
+            `;
+            console.log('✅ Migration 004 applied or already exists');
+        } catch (e: any) {
+            console.error('⚠️ Migration 004 warning:', e.message);
+        }
+
+        // Migration 005: Add imageUrls for career multi-photo
+        console.log('📋 Running Migration 005 (Product imageUrls)...');
+        try {
+            await sql`
+                ALTER TABLE products 
+                ADD COLUMN IF NOT EXISTS image_urls JSONB;
+            `;
+            console.log('✅ Migration 005 applied or already exists');
+        } catch (e: any) {
+            console.error('⚠️ Migration 005 warning:', e.message);
+        }
+
         console.log('\n🎉 SQL Migrations completed successfully!\n');
         process.exit(0);
     } catch (error: any) {

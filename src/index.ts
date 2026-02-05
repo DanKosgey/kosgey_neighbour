@@ -570,14 +570,26 @@ Format as a cohesive paragraph (150-250 words). Be specific and actionable. Avoi
 app.post('/api/marketing/campaign', async (req, res) => {
     try {
         const { marketingService } = await import('./services/marketing/marketingService');
-        const { name, morningTime, afternoonTime, eveningTime, productInfo, targetAudience, uniqueSellingPoint, brandVoice, businessDescription, companyLink } = req.body;
+        const { name, morningTime, afternoonTime, eveningTime, productInfo, targetAudience, uniqueSellingPoint, brandVoice, businessDescription, companyLink, contentSource, selectedProductId, selectedShopId } = req.body;
+
+        const businessContext = (productInfo || contentSource || selectedProductId || selectedShopId) ? {
+            productInfo,
+            targetAudience,
+            uniqueSellingPoint,
+            brandVoice,
+            businessDescription,
+            companyLink,
+            contentSource: contentSource || 'ai',
+            selectedProductId: selectedProductId ?? null,
+            selectedShopId: selectedShopId ?? null
+        } : undefined;
 
         const result = await marketingService.createCampaign(
             name,
             morningTime,
             afternoonTime,
             eveningTime,
-            productInfo ? { productInfo, targetAudience, uniqueSellingPoint, brandVoice, businessDescription, companyLink } : undefined
+            businessContext
         );
         res.json({ success: true, message: result });
     } catch (error) {
@@ -775,13 +787,14 @@ app.post('/api/shops/:id/products', async (req, res) => {
         const shopId = parseInt(req.params.id);
         if (isNaN(shopId)) return res.status(400).json({ error: 'Invalid shop ID' });
 
-        const { name, price, stock, description, image } = req.body;
+        const { name, price, stock, description, image, imageUrls } = req.body;
         const productData = {
             name,
             description,
             price: parseFloat(price),
             stock: parseInt(stock),
-            imageUrl: image
+            imageUrl: image,
+            imageUrls: Array.isArray(imageUrls) ? imageUrls : undefined
         };
 
         const product = await shopService.addProduct(shopId, productData);
@@ -852,44 +865,20 @@ app.get('/api/analytics/engagement', async (req, res) => {
     }
 });
 
-// SPA fallback: Serve index.html for all non-API routes
-// This must be AFTER all API routes
-app.use((req, res, next) => {
-    // Only handle GET requests that aren't for API endpoints
-    if (req.method === 'GET' && !req.path.startsWith('/api/') && !req.path.startsWith('/health') && !req.path.startsWith('/ready')) {
-        res.sendFile(path.join(__dirname, '../public/index.html'));
-    } else {
-        next();
-    }
-});
-
-
-
-
-
-// Analytics API Endpoints
-app.get('/api/analytics/groups', async (req, res) => {
-    try {
-        const { groupService } = await import('./services/groupService');
-        const stats = await groupService.getGroupStats();
-        res.json(stats);
-    } catch (error) {
-        console.error('Failed to fetch group analytics:', error);
-        res.status(500).json({ error: 'Failed to fetch group analytics' });
-    }
-});
-
-app.get('/api/analytics/engagement', async (req, res) => {
+app.get('/api/analytics/dashboard', async (req, res) => {
     try {
         const { analyticsService } = await import('./services/analyticsService');
-        const stats = await analyticsService.getDashboardStats();
-        res.json(stats);
+        const { groupService } = await import('./services/groupService');
+        const [dashboard, groupStats] = await Promise.all([
+            analyticsService.getComprehensiveDashboard(),
+            groupService.getGroupStats()
+        ]);
+        res.json({ ...dashboard, groupStats });
     } catch (error) {
-        console.error('Failed to fetch engagement analytics:', error);
-        res.status(500).json({ error: 'Failed to fetch engagement analytics' });
+        console.error('Failed to fetch analytics dashboard:', error);
+        res.status(500).json({ error: 'Failed to fetch analytics dashboard' });
     }
 });
-
 
 // SPA fallback: Serve index.html for all non-API routes
 // This must be AFTER all API routes

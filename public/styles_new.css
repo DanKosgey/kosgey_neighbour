@@ -316,15 +316,15 @@
 }
 
 .glass-modal {
-    background: #1e293b;
+    background: var(--card-bg);
     /* Fallback */
-    background: rgba(15, 23, 42, 0.95);
+    background: rgba(255, 255, 255, 0.95);
     border: 1px solid var(--border);
     border-radius: 24px;
     padding: 2rem;
     width: 90%;
     max-width: 500px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.15);
     position: relative;
     max-height: 90vh;
     overflow-y: auto;
