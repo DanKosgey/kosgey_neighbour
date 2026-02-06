@@ -85,11 +85,16 @@ CREATE TABLE IF NOT EXISTS "marketing_campaigns" (
 	"afternoon_time" varchar(5) DEFAULT '13:00',
 	"evening_time" varchar(5) DEFAULT '19:00',
 	"target_groups" jsonb,
+	"business_description" text,
 	"product_info" text,
 	"target_audience" text,
 	"unique_selling_point" text,
 	"brand_voice" text,
 	"visual_style" text DEFAULT 'minimalist',
+	"company_link" text,
+	"content_source" varchar(20) DEFAULT 'ai',
+	"selected_product_id" integer,
+	"selected_shop_id" integer,
 	"settings" jsonb,
 	"created_at" timestamp DEFAULT now()
 );
@@ -185,6 +190,66 @@ CREATE TABLE IF NOT EXISTS "user_profile" (
 	"updated_at" timestamp DEFAULT now()
 );
 --> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "shops" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"name" varchar(100) NOT NULL,
+	"description" text,
+	"emoji" varchar(10) DEFAULT '🏪',
+	"type" varchar(20) DEFAULT 'shop',
+	"created_at" timestamp DEFAULT now(),
+	"updated_at" timestamp DEFAULT now()
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "products" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"shop_id" integer NOT NULL,
+	"name" varchar(200) NOT NULL,
+	"description" text,
+	"price" integer DEFAULT 0,
+	"stock" integer DEFAULT 0,
+	"image_url" text,
+	"image_urls" jsonb,
+	"created_at" timestamp DEFAULT now(),
+	"updated_at" timestamp DEFAULT now()
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "groups" (
+	"jid" varchar(100) PRIMARY KEY NOT NULL,
+	"subject" text,
+	"description" text,
+	"creation_time" timestamp,
+	"owner_jid" varchar(50),
+	"total_members" integer DEFAULT 0,
+	"admins_count" integer DEFAULT 0,
+	"is_announce" boolean DEFAULT false,
+	"is_restricted" boolean DEFAULT false,
+	"metadata" jsonb,
+	"bot_joined_at" timestamp DEFAULT now(),
+	"updated_at" timestamp DEFAULT now()
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "group_members" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"group_jid" varchar(100) NOT NULL,
+	"phone" varchar(50) NOT NULL,
+	"role" varchar(20) DEFAULT 'participant',
+	"is_admin" boolean DEFAULT false,
+	"joined_at" timestamp,
+	"last_seen" timestamp,
+	"updated_at" timestamp DEFAULT now()
+);
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "ad_engagements" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"campaign_id" integer,
+	"group_jid" varchar(100),
+	"user_phone" varchar(50),
+	"message_id" varchar(100),
+	"type" varchar(20) NOT NULL,
+	"context" jsonb,
+	"created_at" timestamp DEFAULT now()
+);
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "phone_idx" ON "contacts" ("phone");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "platform_idx" ON "contacts" ("platform");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "fact_category_idx" ON "facts" ("category");--> statement-breakpoint
@@ -198,6 +263,11 @@ CREATE INDEX IF NOT EXISTS "worker_idx" ON "message_queue" ("worker_id");--> sta
 CREATE INDEX IF NOT EXISTS "timestamp_idx" ON "queue_metrics" ("timestamp");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "report_queue_status_idx" ON "report_queue" ("status");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "sched_status_time_idx" ON "scheduled_posts" ("status","scheduled_time");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "product_shop_idx" ON "products" ("shop_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "group_member_pair_idx" ON "group_members" ("group_jid","phone");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "member_role_idx" ON "group_members" ("role");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "eng_camp_type_idx" ON "ad_engagements" ("campaign_id","type");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "eng_msg_idx" ON "ad_engagements" ("message_id");--> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "conversations" ADD CONSTRAINT "conversations_contact_phone_contacts_phone_fk" FOREIGN KEY ("contact_phone") REFERENCES "contacts"("phone") ON DELETE no action ON UPDATE no action;
 EXCEPTION
@@ -218,6 +288,24 @@ END $$;
 --> statement-breakpoint
 DO $$ BEGIN
  ALTER TABLE "scheduled_posts" ADD CONSTRAINT "scheduled_posts_campaign_id_marketing_campaigns_id_fk" FOREIGN KEY ("campaign_id") REFERENCES "marketing_campaigns"("id") ON DELETE no action ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "products" ADD CONSTRAINT "products_shop_id_shops_id_fk" FOREIGN KEY ("shop_id") REFERENCES "shops"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "group_members" ADD CONSTRAINT "group_members_group_jid_groups_jid_fk" FOREIGN KEY ("group_jid") REFERENCES "groups"("jid") ON DELETE cascade ON UPDATE no action;
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+ ALTER TABLE "ad_engagements" ADD CONSTRAINT "ad_engagements_campaign_id_marketing_campaigns_id_fk" FOREIGN KEY ("campaign_id") REFERENCES "marketing_campaigns"("id") ON DELETE no action ON UPDATE no action;
 EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
