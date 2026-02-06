@@ -15,6 +15,35 @@ export class AnalyticsService {
     }
 
     /**
+     * Calculate date range based on timeframe
+     */
+    private getDateRange(timeframe: 'weekly' | 'monthly' | 'yearly' | 'all-time'): { startDate: Date | null; label: string } {
+        const now = new Date();
+        let startDate: Date | null = null;
+
+        switch (timeframe) {
+            case 'weekly':
+                startDate = new Date();
+                startDate.setDate(startDate.getDate() - 7);
+                return { startDate, label: 'Last 7 days' };
+            case 'monthly':
+                startDate = new Date();
+                startDate.setMonth(startDate.getMonth() - 1);
+                return { startDate, label: 'Last 30 days' };
+            case 'yearly':
+                startDate = new Date();
+                startDate.setFullYear(startDate.getFullYear() - 1);
+                return { startDate, label: 'Last 12 months' };
+            case 'all-time':
+                return { startDate: null, label: 'All time' };
+            default:
+                startDate = new Date();
+                startDate.setDate(startDate.getDate() - 7);
+                return { startDate, label: 'Last 7 days' };
+        }
+    }
+
+    /**
      * Track an engagement event
      */
     public async trackEngagement(
@@ -66,11 +95,26 @@ export class AnalyticsService {
     }
 
     /**
+     * Get analytics for a specific timeframe
+     */
+    public async getAnalyticsByTimeframe(timeframe: 'weekly' | 'monthly' | 'yearly' | 'all-time' = 'weekly') {
+        const { startDate, label } = this.getDateRange(timeframe);
+        return this.getComprehensiveDashboard(startDate, label);
+    }
+
+    /**
      * Comprehensive analytics for WhatsApp/Baileys - real-world data analyst insights
      */
-    public async getComprehensiveDashboard() {
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    public async getComprehensiveDashboard(customStartDate?: Date | null, timeframeLabel?: string) {
+        let startDate = customStartDate;
+        let label = timeframeLabel || 'Last 7 days';
+
+        // If no custom date provided, default to 7 days ago
+        if (startDate === undefined) {
+            startDate = new Date();
+            startDate.setDate(startDate.getDate() - 7);
+            label = 'Last 7 days';
+        }
 
         // 1. Engagement Overview (ad campaigns)
         const engagementStats = await db.select({
@@ -109,16 +153,36 @@ export class AnalyticsService {
 
         const avgChatLength = totalContacts > 0 ? Math.round(totalMessages / totalContacts) : 0;
 
-        // 4. Message Volume by Day (last 7 days)
-        const volumeByDay = await db.execute(sql`
+        // 4. Message Volume by Day (based on timeframe)
+        let volumeByDayQuery = sql`
             SELECT 
                 date_trunc('day', created_at AT TIME ZONE 'UTC')::date as day,
                 count(*)::int as count
             FROM message_logs
-            WHERE created_at >= ${sevenDaysAgo}
-            GROUP BY 1
-            ORDER BY 1 ASC
-        `);
+        `;
+        
+        if (startDate) {
+            volumeByDayQuery = sql`
+                SELECT 
+                    date_trunc('day', created_at AT TIME ZONE 'UTC')::date as day,
+                    count(*)::int as count
+                FROM message_logs
+                WHERE created_at >= ${startDate}
+                GROUP BY 1
+                ORDER BY 1 ASC
+            `;
+        } else {
+            volumeByDayQuery = sql`
+                SELECT 
+                    date_trunc('day', created_at AT TIME ZONE 'UTC')::date as day,
+                    count(*)::int as count
+                FROM message_logs
+                GROUP BY 1
+                ORDER BY 1 ASC
+            `;
+        }
+        
+        const volumeByDay = await db.execute(volumeByDayQuery);
         const volRows = Array.isArray(volumeByDay) ? volumeByDay : (volumeByDay?.rows || []);
         const messageVolumeByDay = (volRows as { day: Date; count: number }[]).map(r => ({
             date: r.day instanceof Date ? r.day.toISOString().split('T')[0] : String(r.day || '').split('T')[0],
@@ -126,15 +190,29 @@ export class AnalyticsService {
         }));
 
         // 5. Peak Activity by Hour (0-23)
-        const volumeByHour = await db.execute(sql`
-            SELECT 
-                EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC')::int as hour,
-                count(*)::int as count
-            FROM message_logs
-            WHERE created_at >= ${sevenDaysAgo}
-            GROUP BY 1
-            ORDER BY 1 ASC
-        `);
+        let volumeByHourQuery;
+        if (startDate) {
+            volumeByHourQuery = sql`
+                SELECT 
+                    EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC')::int as hour,
+                    count(*)::int as count
+                FROM message_logs
+                WHERE created_at >= ${startDate}
+                GROUP BY 1
+                ORDER BY 1 ASC
+            `;
+        } else {
+            volumeByHourQuery = sql`
+                SELECT 
+                    EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC')::int as hour,
+                    count(*)::int as count
+                FROM message_logs
+                GROUP BY 1
+                ORDER BY 1 ASC
+            `;
+        }
+        
+        const volumeByHour = await db.execute(volumeByHourQuery);
         const hourRows = Array.isArray(volumeByHour) ? volumeByHour : (volumeByHour?.rows || []);
         const hourMap = (hourRows as { hour: number; count: number }[]).reduce((acc, r) => {
             acc[Number(r.hour)] = Number(r.count);
@@ -143,29 +221,49 @@ export class AnalyticsService {
         const peakActivityByHour = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: hourMap[h] || 0 }));
 
         // 6. Message Type Distribution
-        const typeDistribution = await db.select({
-            type: messageLogs.type,
-            count: sql<number>`count(*)`
-        })
-            .from(messageLogs)
-            .where(gte(messageLogs.createdAt, sevenDaysAgo))
-            .groupBy(messageLogs.type);
+        let messageTypesQuery;
+        if (startDate) {
+            messageTypesQuery = await db.select({
+                type: messageLogs.type,
+                count: sql<number>`count(*)`
+            })
+                .from(messageLogs)
+                .where(gte(messageLogs.createdAt, startDate))
+                .groupBy(messageLogs.type);
+        } else {
+            messageTypesQuery = await db.select({
+                type: messageLogs.type,
+                count: sql<number>`count(*)`
+            })
+                .from(messageLogs)
+                .groupBy(messageLogs.type);
+        }
 
-        const messageTypes = typeDistribution.map(t => ({
+        const messageTypes = messageTypesQuery.map(t => ({
             type: t.type || 'text',
             count: Number(t.count)
         }));
 
         // 7. Inbound vs Outbound (user vs agent)
-        const roleDistribution = await db.select({
-            role: messageLogs.role,
-            count: sql<number>`count(*)`
-        })
-            .from(messageLogs)
-            .where(gte(messageLogs.createdAt, sevenDaysAgo))
-            .groupBy(messageLogs.role);
+        let roleDistributionQuery;
+        if (startDate) {
+            roleDistributionQuery = await db.select({
+                role: messageLogs.role,
+                count: sql<number>`count(*)`
+            })
+                .from(messageLogs)
+                .where(gte(messageLogs.createdAt, startDate))
+                .groupBy(messageLogs.role);
+        } else {
+            roleDistributionQuery = await db.select({
+                role: messageLogs.role,
+                count: sql<number>`count(*)`
+            })
+                .from(messageLogs)
+                .groupBy(messageLogs.role);
+        }
 
-        const inboundOutbound = roleDistribution.reduce((acc, r) => {
+        const inboundOutbound = roleDistributionQuery.reduce((acc, r) => {
             acc[r.role] = Number(r.count);
             return acc;
         }, {} as Record<string, number>);
@@ -200,28 +298,51 @@ export class AnalyticsService {
             // Queue tables might not exist in older setups
         }
 
-        // 9. New Contacts (last 7 days)
-        const newContactsCount = await db.select({ count: sql<number>`count(*)` })
-            .from(contacts)
-            .where(gte(contacts.createdAt, sevenDaysAgo))
-            .then(r => Number(r[0]?.count || 0));
+        // 9. New Contacts (based on timeframe)
+        let newContactsCount;
+        if (startDate) {
+            newContactsCount = await db.select({ count: sql<number>`count(*)` })
+                .from(contacts)
+                .where(gte(contacts.createdAt, startDate))
+                .then(r => Number(r[0]?.count || 0));
+        } else {
+            newContactsCount = await db.select({ count: sql<number>`count(*)` })
+                .from(contacts)
+                .then(r => Number(r[0]?.count || 0));
+        }
 
-        // 10. Response time proxy: avg time between user msg and next agent msg (sample last 7d)
-        // Simplified: we'll compute a rough estimate from message order
+        // 10. Response time proxy: avg time between user msg and next agent msg
         let avgResponseTimeSec = 0;
         try {
-            const responseSamples = await db.execute(sql`
-                WITH ordered_msgs AS (
-                    SELECT contact_phone, role, created_at,
-                        LAG(created_at) OVER (PARTITION BY contact_phone ORDER BY created_at) as prev_ts,
-                        LAG(role) OVER (PARTITION BY contact_phone ORDER BY created_at) as prev_role
-                    FROM message_logs
-                    WHERE created_at >= ${sevenDaysAgo}
-                )
-                SELECT AVG(EXTRACT(EPOCH FROM (created_at - prev_ts)))::int as avg_sec
-                FROM ordered_msgs
-                WHERE role = 'agent' AND prev_role = 'user' AND prev_ts IS NOT NULL
-            `);
+            let responseSamplesQuery;
+            if (startDate) {
+                responseSamplesQuery = sql`
+                    WITH ordered_msgs AS (
+                        SELECT contact_phone, role, created_at,
+                            LAG(created_at) OVER (PARTITION BY contact_phone ORDER BY created_at) as prev_ts,
+                            LAG(role) OVER (PARTITION BY contact_phone ORDER BY created_at) as prev_role
+                        FROM message_logs
+                        WHERE created_at >= ${startDate}
+                    )
+                    SELECT AVG(EXTRACT(EPOCH FROM (created_at - prev_ts)))::int as avg_sec
+                    FROM ordered_msgs
+                    WHERE role = 'agent' AND prev_role = 'user' AND prev_ts IS NOT NULL
+                `;
+            } else {
+                responseSamplesQuery = sql`
+                    WITH ordered_msgs AS (
+                        SELECT contact_phone, role, created_at,
+                            LAG(created_at) OVER (PARTITION BY contact_phone ORDER BY created_at) as prev_ts,
+                            LAG(role) OVER (PARTITION BY contact_phone ORDER BY created_at) as prev_role
+                        FROM message_logs
+                    )
+                    SELECT AVG(EXTRACT(EPOCH FROM (created_at - prev_ts)))::int as avg_sec
+                    FROM ordered_msgs
+                    WHERE role = 'agent' AND prev_role = 'user' AND prev_ts IS NOT NULL
+                `;
+            }
+            
+            const responseSamples = await db.execute(responseSamplesQuery);
             const respRows = Array.isArray(responseSamples) ? responseSamples : (responseSamples?.rows || []);
             const row = (respRows as { avg_sec: number }[])[0];
             avgResponseTimeSec = row?.avg_sec ? Math.round(Number(row.avg_sec)) : 0;
@@ -230,18 +351,30 @@ export class AnalyticsService {
         }
 
         // 11. Most active contacts (top 5 by message count)
-        const topContacts = await db.select({
-            contactPhone: messageLogs.contactPhone,
-            count: sql<number>`count(*)`
-        })
-            .from(messageLogs)
-            .where(gte(messageLogs.createdAt, sevenDaysAgo))
-            .groupBy(messageLogs.contactPhone)
-            .orderBy(desc(sql`count(*)`))
-            .limit(5);
+        let topContactsQuery;
+        if (startDate) {
+            topContactsQuery = await db.select({
+                contactPhone: messageLogs.contactPhone,
+                count: sql<number>`count(*)`
+            })
+                .from(messageLogs)
+                .where(gte(messageLogs.createdAt, startDate))
+                .groupBy(messageLogs.contactPhone)
+                .orderBy(desc(sql`count(*)`))
+                .limit(5);
+        } else {
+            topContactsQuery = await db.select({
+                contactPhone: messageLogs.contactPhone,
+                count: sql<number>`count(*)`
+            })
+                .from(messageLogs)
+                .groupBy(messageLogs.contactPhone)
+                .orderBy(desc(sql`count(*)`))
+                .limit(5);
+        }
 
         const topContactsWithNames = await Promise.all(
-            topContacts.map(async (tc) => {
+            topContactsQuery.map(async (tc) => {
                 const contactRows = await db.select()
                     .from(contacts)
                     .where(eq(contacts.phone, tc.contactPhone || ''))
@@ -260,6 +393,7 @@ export class AnalyticsService {
         const replies = statsMap['reply'] || 0;
 
         return {
+            timeframe: label,
             overview: {
                 delivered,
                 read,

@@ -869,8 +869,9 @@ app.get('/api/analytics/dashboard', async (req, res) => {
     try {
         const { analyticsService } = await import('./services/analyticsService');
         const { groupService } = await import('./services/groupService');
+        const timeframe = (req.query.timeframe as string) || 'weekly';
         const [dashboard, groupStats] = await Promise.all([
-            analyticsService.getComprehensiveDashboard(),
+            analyticsService.getAnalyticsByTimeframe(timeframe as any),
             groupService.getGroupStats()
         ]);
         res.json({ ...dashboard, groupStats });

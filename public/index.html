@@ -172,7 +172,13 @@
                             <h2>📊 WhatsApp Analytics</h2>
                         </div>
                         <div class="analytics-header-actions">
-                            <span class="section-badge">Last 7 days</span>
+                            <div class="timeframe-selector">
+                                <button class="btn-timeframe active" data-timeframe="weekly" onclick="switchTimeframe('weekly')">📅 Weekly</button>
+                                <button class="btn-timeframe" data-timeframe="monthly" onclick="switchTimeframe('monthly')">📆 Monthly</button>
+                                <button class="btn-timeframe" data-timeframe="yearly" onclick="switchTimeframe('yearly')">📊 Yearly</button>
+                                <button class="btn-timeframe" data-timeframe="all-time" onclick="switchTimeframe('all-time')">🕐 All Time</button>
+                            </div>
+                            <span class="section-badge" id="timeframe-badge">Last 7 days</span>
                             <button class="btn-secondary" onclick="loadAnalytics()">🔄 Refresh</button>
                         </div>
                     </div>

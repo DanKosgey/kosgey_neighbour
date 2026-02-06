@@ -3081,16 +3081,23 @@ let volumeChart = null;
 let peakHoursChart = null;
 let messageTypesChart = null;
 let inboundOutboundChart = null;
+let currentTimeframe = 'weekly'; // Track current timeframe
 
-async function loadAnalytics() {
-    console.log('🔄 Loading Analytics Dashboard...');
+async function loadAnalytics(timeframe = 'weekly') {
+    console.log('🔄 Loading Analytics Dashboard for timeframe:', timeframe);
     try {
-        const res = await fetch(`${API_BASE}/api/analytics/dashboard`);
+        const res = await fetch(`${API_BASE}/api/analytics/dashboard?timeframe=${timeframe}`);
         if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
         const data = await res.json();
 
-        const { overview, groupStats, messageVolumeByDay, peakActivityByHour, messageTypes, inboundOutbound, topContactsByVolume, topCampaigns } = data;
+        const { overview, groupStats, messageVolumeByDay, peakActivityByHour, messageTypes, inboundOutbound, topContactsByVolume, topCampaigns, timeframe: returnedTimeframe } = data;
         const groups = (groupStats?.largestGroups || []);
+
+        // Update timeframe badge
+        const badgeEl = document.getElementById('timeframe-badge');
+        if (badgeEl) {
+            badgeEl.textContent = returnedTimeframe || 'Last 7 days';
+        }
 
         // KPI Cards
         setEl('stat-total-messages', overview?.totalMessages ?? 0);
@@ -3123,6 +3130,22 @@ async function loadAnalytics() {
         console.error('Failed to load analytics:', error);
         showToast('Failed to load analytics data', 'error');
     }
+}
+
+function switchTimeframe(timeframe) {
+    console.log('📊 Switching to timeframe:', timeframe);
+    currentTimeframe = timeframe;
+    
+    // Update button states
+    document.querySelectorAll('.btn-timeframe').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.timeframe === timeframe) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Load analytics for the selected timeframe
+    loadAnalytics(timeframe);
 }
 
 function setEl(id, val) {

@@ -697,3 +697,59 @@
 [data-theme="light"] .card-content small {
     color: #6b7280;
 }
+
+/* ==========================================
+   TIMEFRAME SELECTOR
+   ========================================== */
+
+.timeframe-selector {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.btn-timeframe {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.btn-timeframe:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(124, 58, 237, 0.05);
+}
+
+.btn-timeframe.active {
+    border-color: var(--primary);
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(139, 92, 246, 0.2));
+    color: var(--primary);
+    font-weight: 600;
+    box-shadow: 0 0 12px rgba(124, 58, 237, 0.2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .timeframe-selector {
+        gap: 0.25rem;
+    }
+
+    .btn-timeframe {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+    }
+
+    .analytics-header-actions {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+}
