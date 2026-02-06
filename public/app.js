@@ -1028,10 +1028,12 @@ function initializeSettings() {
     // Calendar Access Control Toggle
     const calendarAccessToggle = document.getElementById('calendar-access-toggle');
     if (calendarAccessToggle) {
-        calendarAccessToggle.addEventListener('change', async () => {
+        calendarAccessToggle.addEventListener('change', async (event) => {
+            // Prevent event bubbling to parent elements
+            event.stopPropagation();
+            
             const isEnabled = calendarAccessToggle.checked;
             const statusEl = document.getElementById('access-status-text');
-            const toggleLabel = document.querySelector('label[for="calendar-access-toggle"]') || calendarAccessToggle.parentElement;
 
             // Disable toggle while saving
             calendarAccessToggle.disabled = true;
