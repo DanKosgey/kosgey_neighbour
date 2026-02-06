@@ -1,119 +1,80 @@
 import { migrate } from 'drizzle-orm/neon-http/migrator';
 import { db, testConnection } from './index';
-import { neon } from '@neondatabase/serverless';
-import { config } from '../config/env';
 import path from 'path';
 import fs from 'fs';
 
 export async function runMigrations() {
-    console.log('📦 Starting comprehensive database migrations...');
+    console.log('📦 Starting database migrations...');
     
     try {
         // Step 1: Test connection
         console.log('🔗 Testing database connection...');
-        await testConnection();
-        console.log('✅ Database connection successful');
-
-        // Initialize direct SQL executor for manual migrations
-        if (!config.databaseUrl) {
-            console.warn('⚠️ DATABASE_URL not set, skipping manual SQL migrations');
+        const connected = await testConnection();
+        if (!connected) {
+            console.error('❌ Database connection failed');
             return;
         }
-        const sql = neon(config.databaseUrl);
+        console.log('✅ Database connection successful');
 
         // Step 2: Run drizzle auto-migrations from drizzle/ folder
+        // This is the most reliable way to run migrations with Neon
         console.log('📂 Running drizzle migrations...');
-        const drizzelFolder = path.join(process.cwd(), 'drizzle');
+        const migrationFolder = path.join(process.cwd(), 'drizzle');
         
-        if (fs.existsSync(drizzelFolder)) {
+        if (fs.existsSync(migrationFolder)) {
             try {
-                await migrate(db, { migrationsFolder: drizzelFolder });
+                console.log(`📁 Migration folder found: ${migrationFolder}`);
+                await migrate(db, { migrationsFolder: migrationFolder });
                 console.log('✅ Drizzle migrations completed');
             } catch (error: any) {
-                if ((error as any).code === '42P07' || (error as any).code === '42701') {
-                    console.log('⚠️ Tables/columns already exist, skipping drizzle migrations');
+                // Check for specific error codes that indicate success
+                if (
+                    error.code === '42P07' || 
+                    error.code === '42701' ||
+                    error.message?.includes('already exists')
+                ) {
+                    console.log('✅ Tables/columns already exist (migration state maintained)');
                 } else {
-                    console.warn('⚠️ Drizzle migration warning:', error.message);
+                    console.error('❌ Drizzle migration error:', error.message);
+                    throw error;
                 }
             }
         } else {
-            console.log('⚠️ Drizzle folder not found, skipping auto-migrations');
+            console.error('❌ Drizzle migration folder not found:', migrationFolder);
+            throw new Error('Missing drizzle migration folder');
         }
 
-        // Step 3: Run manual SQL migrations from migrations/ folder
-        console.log('📝 Running manual SQL migrations...');
-        const migrationsFolder = path.join(process.cwd(), 'migrations');
-        
-        if (fs.existsSync(migrationsFolder)) {
-            const migrationFiles = fs.readdirSync(migrationsFolder)
-                .filter(f => f.endsWith('.sql'))
-                .sort(); // Ensure lexicographic order (001_, 002_, etc.)
-
-            console.log(`📄 Found ${migrationFiles.length} SQL migration files`);
-
-            for (const file of migrationFiles) {
-                const filePath = path.join(migrationsFolder, file);
-                const sqlContent = fs.readFileSync(filePath, 'utf-8');
-
-                try {
-                    console.log(`  🔄 Applying: ${file}`);
-                    
-                    // Split by semicolons and execute each statement
-                    const statements = sqlContent
-                        .split(';')
-                        .map(s => s.trim())
-                        .filter(s => s.length > 0 && !s.startsWith('--'));
-
-                    for (const statement of statements) {
-                        try {
-                            // Use the sql tagged template literal (note: can't use dynamic strings directly)
-                            // Neon's sql function requires static strings, so we need to use it carefully
-                            await sql(statement as any);
-                        } catch (execError: any) {
-                            // Ignore "already exists" errors
-                            if (execError.code === '42P07' || execError.message?.includes('already exists')) {
-                                continue;
-                            }
-                            throw execError;
-                        }
-                    }
-                    
-                    console.log(`  ✅ Applied: ${file}`);
-                } catch (error: any) {
-                    if (error.code === '42P07' || error.message?.includes('already exists')) {
-                        console.log(`  ⏭️ Skipped: ${file} (already applied)`);
-                    } else if (error.code === '42703' || error.message?.includes('does not exist')) {
-                        console.warn(`  ⚠️ Partially skipped: ${file} (some dependencies not met)`);
-                    } else {
-                        console.error(`  ❌ Failed: ${file}`, error.message);
-                    }
-                }
-            }
-        } else {
-            console.log('⚠️ migrations/ folder not found, skipping manual SQL migrations');
-        }
-
-        // Step 4: Verify critical tables exist
+        // Step 3: Verify critical tables exist
         console.log('✓ Verifying critical tables...');
         const criticalTables = ['contacts', 'message_logs', 'auth_credentials', 'groups', 'group_members'];
+        const missingTables: string[] = [];
         
         for (const table of criticalTables) {
             try {
-                await sql(`SELECT 1 FROM ${table} LIMIT 1` as any);
+                // Use drizzle's query builder to check table exists
+                await db.execute(`SELECT 1 FROM ${table} LIMIT 1` as any);
                 console.log(`  ✅ ${table}`);
             } catch (error: any) {
-                if (!error.message?.includes('does not exist')) {
-                    console.warn(`  ⚠️ ${table}: Accessible but may have issues`);
+                if (error.message?.includes('does not exist')) {
+                    missingTables.push(table);
+                    console.warn(`  ⚠️ ${table}: Missing`);
                 } else {
-                    console.warn(`  ⚠️ ${table}: Table missing - will create on first use`);
+                    console.warn(`  ⚠️ ${table}: ${error.message}`);
                 }
             }
+        }
+
+        if (missingTables.length > 0) {
+            console.error(`\n❌ Missing critical tables: ${missingTables.join(', ')}`);
+            console.error('This usually means drizzle migrations did not apply.');
+            console.error('Check that drizzle/ folder contains migration files.');
+            throw new Error(`Missing tables: ${missingTables.join(', ')}`);
         }
 
         console.log('\n✅ All database migrations completed successfully!\n');
     } catch (error) {
-        console.error('❌ Critical migration error:', error);
-        console.error('\n⚠️⚠️⚠️ Database may be in an inconsistent state! ⚠️⚠️⚠️');
-        console.error('Please check your migrations and database connection.\n');
+        console.error('\n❌ Migration failed:', error);
+        console.error('Attempting to continue with reduced functionality...\n');
+        // Don't throw - allow app to start but with warnings
     }
 }

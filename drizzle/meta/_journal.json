@@ -15,6 +15,13 @@
       "when": 1769930412502,
       "tag": "0001_tense_wilson_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1738848447000,
+      "tag": "0002_add_groups_tables",
+      "breakpoints": true
     }
   ]
 }
