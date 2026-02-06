@@ -471,7 +471,7 @@ export class WhatsAppClient {
             );
 
             // 🎯 Generate AI response for group replies (with API key rotation)
-            if (jid.includes('@g.us')) {
+            if (jid.includes('@g.us') && text) {
               await this.handleGroupAdReplyResponse(jid, msg, text);
             }
           }
@@ -525,7 +525,8 @@ Your response:`;
       if (this.sock) {
         console.log(`📤 Sending group reply to ${groupJid}...`);
         const sentMsg = await this.sock.sendMessage(groupJid, {
-          text: response,
+          text: response
+        }, {
           quoted: msg
         });
 
