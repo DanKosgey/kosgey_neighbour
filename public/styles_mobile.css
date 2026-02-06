@@ -176,7 +176,12 @@
     }
 
     #products-view {
-        padding-bottom: 40px !important;
+        padding-bottom: 120px !important;
+    }
+
+    /* Ensure empty states and content in career/skills view has space */
+    .empty-state {
+        margin-bottom: 80px !important;
     }
 
     .marketing-sidebar {
