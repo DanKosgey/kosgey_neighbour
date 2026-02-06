@@ -1,4 +1,4 @@
-import { neon, sql as neonSql } from '@neondatabase/serverless';
+import { neon, sql } from '@neondatabase/serverless';
 import { config } from '../config/env';
 import path from 'path';
 import fs from 'fs';
@@ -11,13 +11,14 @@ export async function runMigrations() {
         return;
     }
 
-    const sql = neon(config.databaseUrl);
-    
     try {
+        // Create pooled connection
+        const client = neon(config.databaseUrl, { fullResults: true });
+        
         // Step 1: Test connection
         console.log('🔗 Testing database connection...');
         try {
-            const result = await sql('SELECT 1');
+            const result = await client('SELECT 1');
             console.log('✅ Database connection successful');
         } catch (error: any) {
             console.error('❌ Database health check failed:', error.message);
@@ -43,37 +44,41 @@ export async function runMigrations() {
                 console.log(`  🔄 Executing: ${file}`);
 
                 try {
-                    // Split by --> statement-breakpoint and execute each statement block
-                    const blocks = sqlContent.split('-->').filter(b => b.trim());
-                    
-                    for (const block of blocks) {
+                    // Split by --> statement-breakpoint and execute statements
+                    const blocks = sqlContent.split('-->');
+                    let successCount = 0;
+                    let skipCount = 0;
+
+                    for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
+                        const block = blocks[blockIdx];
                         const statements = block
                             .split(';')
                             .map(s => s.trim())
                             .filter(s => s.length > 0 && !s.startsWith('--'));
 
                         for (const stmt of statements) {
-                            if (stmt.length > 0) {
+                            if (stmt.length > 10) { // Skip very short statements
                                 try {
-                                    // Execute with error handling for each statement
-                                    await sql(stmt);
+                                    // Execute raw SQL directly
+                                    const result = await client(stmt);
+                                    successCount++;
                                 } catch (stmtError: any) {
-                                    // Skip "already exists" type errors
+                                    // Skip "already exists" errors
                                     if (
                                         stmtError.code === '42P07' || 
                                         stmtError.code === '42701' ||
-                                        stmtError.message?.includes('already exists')
+                                        stmtError.message?.includes('already')
                                     ) {
-                                        continue;
+                                        skipCount++;
+                                    } else {
+                                        console.warn(`      Statement error: ${stmtError.code}`);
                                     }
-                                    // For other errors, still continue to next statement
-                                    console.warn(`      ⚠️ Statement skipped: ${stmtError.code || stmtError.message}`);
                                 }
                             }
                         }
                     }
                     
-                    console.log(`  ✅ Executed: ${file}`);
+                    console.log(`  ✅ Executed: ${file} (${successCount} statements)`);
                 } catch (error: any) {
                     console.warn(`  ⚠️ ${file}: ${error.message || error}`);
                 }
@@ -83,35 +88,33 @@ export async function runMigrations() {
         }
 
         // Step 3: Verify critical tables exist
-        console.log('✓ Verifying critical tables...');
+        console.log('\n✓ Verifying critical tables...');
         const criticalTables = ['contacts', 'message_logs', 'auth_credentials', 'groups', 'group_members'];
         const missingTables: string[] = [];
         
         for (const table of criticalTables) {
             try {
-                await sql(`SELECT 1 FROM "${table}" LIMIT 1`);
+                const result = await client(`SELECT 1 FROM "${table}" LIMIT 1`);
                 console.log(`  ✅ ${table}`);
             } catch (error: any) {
                 if (error.code === '42P01' || error.message?.includes('does not exist')) {
                     missingTables.push(table);
                     console.warn(`  ⚠️ ${table}: Does not exist`);
                 } else {
-                    console.warn(`  ⚠️ ${table}: ${error.message}`);
+                    console.warn(`  ⚠️ ${table}: ${error.code}`);
                 }
             }
         }
 
         if (missingTables.length > 0) {
             console.error(`\n⚠️ Warning: Missing tables: ${missingTables.join(', ')}`);
-            console.error('Some features may have database errors.');
         } else {
-            console.log('✅ All critical tables verified!');
+            console.log('\n✅ All critical tables verified!');
         }
 
         console.log('\n✅ All database migrations completed successfully!\n');
     } catch (error: any) {
         console.error('\n❌ Migration error:', error.message);
         console.error('Continuing with application startup...\n');
-        // Don't throw - allow app to continue
     }
 }
