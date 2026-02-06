@@ -84,6 +84,99 @@ function initializeNavigation() {
             switchPage(page);
         });
     });
+
+    // Initialize mobile nav scroll behavior on first load
+    setTimeout(() => {
+        initializeMobileNavScroll();
+    }, 500);
+}
+
+/**
+ * Initialize mobile navigation scroll functionality
+ */
+function initializeMobileNavScroll() {
+    const mobileNav = document.querySelector('.mobile-nav');
+    if (!mobileNav) return;
+
+    // Trigger peek animation to show nav is scrollable
+    triggerNavPeekAnimation(mobileNav);
+}
+
+/**
+ * Scroll active item into view on mobile nav
+ */
+function scrollActiveNavItemIntoView() {
+    const mobileNav = document.querySelector('.mobile-nav');
+    const activeItem = document.querySelector('.mobile-nav-item.active');
+
+    if (mobileNav && activeItem) {
+        // Smooth scroll the active item to the center of the nav
+        activeItem.scrollIntoView({
+            behavior: 'smooth',
+            block: 'nearest',
+            inline: 'center'
+        });
+    }
+}
+
+/**
+ * Trigger a peek animation to indicate the nav is scrollable
+ */
+function triggerNavPeekAnimation(navElement) {
+    // Only do this if there are hidden items (nav is scrollable)
+    const isScrollable = navElement.scrollWidth > navElement.clientWidth;
+    
+    if (!isScrollable) return;
+
+    // Get current scroll position
+    const startScroll = navElement.scrollLeft;
+
+    // Animate: scroll right slightly and back
+    const peekDistance = 30;
+    const peekDuration = 300;
+    const returnDuration = 400;
+
+    // Peek animation using requestAnimationFrame
+    let startTime = null;
+
+    const peekAnimate = (timestamp) => {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+        const progress = Math.min(elapsed / peekDuration, 1);
+
+        // Ease-out cubic for smooth peek
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        navElement.scrollLeft = startScroll + (peekDistance * easeProgress);
+
+        if (progress < 1) {
+            requestAnimationFrame(peekAnimate);
+        } else {
+            // Return to start position
+            returnToStart();
+        }
+    };
+
+    const returnToStart = () => {
+        let returnStartTime = null;
+
+        const returnAnimate = (timestamp) => {
+            if (!returnStartTime) returnStartTime = timestamp;
+            const elapsed = timestamp - returnStartTime;
+            const progress = Math.min(elapsed / returnDuration, 1);
+
+            // Ease-in cubic for smooth return
+            const easeProgress = Math.pow(progress, 3);
+            navElement.scrollLeft = startScroll + (peekDistance * (1 - easeProgress));
+
+            if (progress < 1) {
+                requestAnimationFrame(returnAnimate);
+            }
+        };
+
+        requestAnimationFrame(returnAnimate);
+    };
+
+    requestAnimationFrame(peekAnimate);
 }
 
 function switchPage(page) {
@@ -102,6 +195,11 @@ function switchPage(page) {
             item.classList.add('active');
         }
     });
+
+    // Scroll mobile nav to show active item
+    setTimeout(() => {
+        scrollActiveNavItemIntoView();
+    }, 50);
 
     // Update pages
     document.querySelectorAll('.page').forEach(p => {
@@ -172,11 +270,18 @@ async function checkStatus() {
         const response = await fetch(`${API_BASE}/api/status`);
         const data = await response.json();
 
-        updateConnectionStatus(data.whatsapp.status, data.whatsapp.qr);
+        const newStatus = data.whatsapp.status;
+
+        // Detect first-time connect in this session
+        if (connectionStatus !== 'CONNECTED' && newStatus === 'CONNECTED') {
+            handleJustConnected();
+        }
+
+        updateConnectionStatus(newStatus, data.whatsapp.qr);
 
         // If status changed, reload current page
-        if (data.whatsapp.status !== connectionStatus) {
-            connectionStatus = data.whatsapp.status;
+        if (newStatus !== connectionStatus) {
+            connectionStatus = newStatus;
             loadPageData(currentPage);
         }
     } catch (error) {
@@ -199,17 +304,20 @@ function updateConnectionStatus(status, qr = null) {
             label.textContent = 'Connected';
             detail.textContent = 'WhatsApp is online';
             hideQRSection();
+            hideOnboardingOverlay();
             break;
         case 'WAITING_FOR_QR':
             label.textContent = 'Waiting for QR';
             detail.textContent = 'Scan to connect';
             showQRCode(qr);
+            hideOnboardingOverlay();
             break;
         default:
             indicator.classList.add('disconnected');
             label.textContent = 'Disconnected';
             detail.textContent = 'Not connected';
             hideQRSection();
+            showOnboardingOverlay();
     }
 }
 
@@ -240,6 +348,42 @@ function hideQRSection() {
 
     qrSection.style.display = 'none';
     statsGrid.style.display = 'grid';
+}
+
+// Onboarding overlay helpers
+function showOnboardingOverlay() {
+    const overlay = document.getElementById('onboarding-overlay');
+    if (overlay) {
+        overlay.style.display = 'flex';
+    }
+}
+
+function hideOnboardingOverlay() {
+    const overlay = document.getElementById('onboarding-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+}
+
+window.handleGetStarted = function () {
+    hideOnboardingOverlay();
+    // Make sure the user is on the dashboard where the QR lives
+    switchPage('dashboard');
+    // Trigger an immediate status check so the QR shows as soon as it’s available
+    checkStatus();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+// After WhatsApp connects for the first time in a session, walk the user
+// through Profile → AI Profile → Dashboard with gentle prompts.
+function handleJustConnected() {
+    // Only run onboarding flow once per browser unless manually reset
+    if (localStorage.getItem('onboarding-complete') === '1') return;
+
+    // Start at the human profile
+    switchPage('user-profile');
+    showToast('Nice! WhatsApp Business is now linked. Let’s quickly set up your profile.', 'success');
+    localStorage.setItem('onboarding-profile-step', 'pending');
 }
 
 // Dashboard
@@ -638,12 +782,63 @@ async function loadSettings() {
         const response = await fetch(`${API_BASE}/api/settings/system`);
         const data = await response.json();
         if (data.success && data.settings) {
-            const batchWindow = data.settings['batch_window_ms'] || 30000;
-            const input = document.getElementById('batch-window-input');
-            if (input) input.value = batchWindow;
+            const s = data.settings;
+            const batchInput = document.getElementById('batch-window-input');
+            if (batchInput) batchInput.value = s['batch_window_ms'] || 30000;
+            const calId = document.getElementById('google-calendar-id');
+            if (calId) calId.value = s['google_calendar_id'] || '';
+            const whStart = document.getElementById('working-hours-start');
+            if (whStart) whStart.value = s['working_hours_start'] || '09:00';
+            const whEnd = document.getElementById('working-hours-end');
+            if (whEnd) whEnd.value = s['working_hours_end'] || '18:00';
+            const minDur = document.getElementById('min-meeting-duration');
+            if (minDur) minDur.value = s['min_meeting_duration'] || '10';
+            const buf = document.getElementById('buffer-time');
+            if (buf) buf.value = s['buffer_time'] || '15';
+            const bd = document.getElementById('booking-days');
+            const bdVal = s['booking_days'] || '1,2,3,4,5';
+            if (bd) bd.value = bdVal;
+            syncBookingDaysPills(bdVal);
+
+            // Load Calendar Access Status
+            const calendarAccessToggle = document.getElementById('calendar-access-toggle');
+            const calendarAccessStatus = document.getElementById('access-status-text');
+            if (calendarAccessToggle && calendarAccessStatus) {
+                const calendarAccessEnabled = s['calendar_access_enabled'] !== 'false'; // Default to true if not set
+                calendarAccessToggle.checked = calendarAccessEnabled;
+                updateCalendarAccessStatus(calendarAccessEnabled);
+            }
         }
     } catch (error) {
         console.error('Failed to load system settings:', error);
+    }
+}
+
+function syncBookingDaysPills(valueStr) {
+    const days = (valueStr || '1,2,3,4,5').split(',').map(d => parseInt(d.trim(), 10)).filter(n => !isNaN(n) && n >= 1 && n <= 7);
+    document.querySelectorAll('.booking-day-pill').forEach(pill => {
+        const d = parseInt(pill.dataset.day, 10);
+        pill.classList.toggle('active', days.includes(d));
+    });
+}
+
+function getBookingDaysFromPills() {
+    const active = Array.from(document.querySelectorAll('.booking-day-pill.active'))
+        .map(p => p.dataset.day)
+        .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    return active.length ? active.join(',') : '1,2,3,4,5';
+}
+
+function updateCalendarAccessStatus(isEnabled) {
+    const statusEl = document.getElementById('access-status-text');
+    if (statusEl) {
+        if (isEnabled) {
+            statusEl.innerHTML = '✅ <strong>Calendar access enabled</strong> — Customers can schedule meetings';
+            statusEl.style.color = 'var(--success, #10b981)';
+        } else {
+            statusEl.innerHTML = '🔒 <strong>Calendar access disabled</strong> — Scheduling features are hidden';
+            statusEl.style.color = 'var(--warning, #f59e0b)';
+        }
     }
 }
 
@@ -697,6 +892,67 @@ function initializeSettings() {
         } finally {
             btn.disabled = false;
         }
+    });
+
+    // Save Calendar Settings
+    document.getElementById('save-calendar-settings-btn')?.addEventListener('click', async () => {
+        const btn = document.getElementById('save-calendar-settings-btn');
+        const textEl = btn.querySelector('.btn-text');
+        const originalHtml = btn.innerHTML;
+        btn.classList.add('loading');
+        if (textEl) textEl.textContent = 'Saving...';
+        else btn.textContent = 'Saving...';
+        btn.disabled = true;
+        try {
+            const items = [
+                { key: 'google_calendar_id', value: document.getElementById('google-calendar-id')?.value || '' },
+                { key: 'working_hours_start', value: document.getElementById('working-hours-start')?.value || '09:00' },
+                { key: 'working_hours_end', value: document.getElementById('working-hours-end')?.value || '18:00' },
+                { key: 'min_meeting_duration', value: document.getElementById('min-meeting-duration')?.value || '10' },
+                { key: 'buffer_time', value: document.getElementById('buffer-time')?.value || '15' },
+                { key: 'booking_days', value: getBookingDaysFromPills() }
+            ];
+            for (const { key, value } of items) {
+                await fetch(`${API_BASE}/api/settings/system`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, value })
+                });
+            }
+            btn.classList.remove('loading');
+            if (textEl) textEl.textContent = 'Saved ✓';
+            else btn.textContent = 'Saved ✓';
+            btn.classList.add('saved');
+            showToast('Calendar settings saved', 'success');
+            setTimeout(() => { btn.innerHTML = originalHtml; btn.classList.remove('saved'); btn.disabled = false; }, 2000);
+        } catch (error) {
+            console.error('Failed to save calendar settings:', error);
+            btn.classList.remove('loading');
+            showToast('Failed to save calendar settings', 'error');
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        }
+    });
+
+    // Booking days pills toggle
+    const bdInput = document.getElementById('booking-days');
+    if (bdInput) syncBookingDaysPills(bdInput.value || '1,2,3,4,5');
+    document.querySelectorAll('.booking-day-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+            pill.classList.toggle('active');
+            if (bdInput) bdInput.value = getBookingDaysFromPills();
+        });
+    });
+
+    // Preset pills (Weekdays, Weekends, All Days)
+    document.querySelectorAll('.preset-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+            const preset = pill.dataset.preset;
+            const values = { weekdays: '1,2,3,4,5', weekends: '6,7', all: '1,2,3,4,5,6,7' };
+            const val = values[preset] || '1,2,3,4,5';
+            if (bdInput) bdInput.value = val;
+            syncBookingDaysPills(val);
+        });
     });
 
     // Run Migrations
@@ -768,6 +1024,50 @@ function initializeSettings() {
             }
         }
     });
+
+    // Calendar Access Control Toggle
+    const calendarAccessToggle = document.getElementById('calendar-access-toggle');
+    if (calendarAccessToggle) {
+        calendarAccessToggle.addEventListener('change', async () => {
+            const isEnabled = calendarAccessToggle.checked;
+            const statusEl = document.getElementById('access-status-text');
+            const toggleLabel = document.querySelector('label[for="calendar-access-toggle"]') || calendarAccessToggle.parentElement;
+
+            // Disable toggle while saving
+            calendarAccessToggle.disabled = true;
+            if (statusEl) statusEl.textContent = 'Updating...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/settings/system`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        key: 'calendar_access_enabled',
+                        value: isEnabled ? 'true' : 'false'
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success || response.ok) {
+                    updateCalendarAccessStatus(isEnabled);
+                    showToast(
+                        isEnabled ? '✅ Calendar access enabled' : '🔒 Calendar access disabled',
+                        'success'
+                    );
+                } else {
+                    throw new Error(data.error || 'Failed to update setting');
+                }
+            } catch (error) {
+                console.error('Failed to update calendar access:', error);
+                // Revert toggle on error
+                calendarAccessToggle.checked = !isEnabled;
+                if (statusEl) statusEl.textContent = '❌ Error updating setting';
+                showToast('Failed to update calendar access', 'error');
+            } finally {
+                calendarAccessToggle.disabled = false;
+            }
+        });
+    }
 }
 
 // Refresh
@@ -944,6 +1244,14 @@ async function saveAIProfile() {
                 btn.disabled = false;
             }, 2000);
             alert('AI Profile saved successfully! The changes will take effect in new conversations.');
+
+            // Complete onboarding journey: AI profile configured
+            if (localStorage.getItem('onboarding-ai-step') === 'pending') {
+                localStorage.setItem('onboarding-ai-step', 'done');
+                localStorage.setItem('onboarding-complete', '1');
+                showToast('You’re all set! Welcome to your WhatsApp marketing command center.', 'success');
+                switchPage('dashboard');
+            }
         } else {
             throw new Error(result.error || 'Save failed');
         }
@@ -1107,6 +1415,15 @@ async function saveUserProfile() {
                 btn.disabled = false;
             }, 2000);
             alert('Profile saved successfully! The AI will use this information to provide better responses.');
+
+            // If we are in the post-connection onboarding flow, move to AI Profile next
+            if (localStorage.getItem('onboarding-profile-step') === 'pending' &&
+                localStorage.getItem('onboarding-ai-step') !== 'done') {
+                localStorage.setItem('onboarding-profile-step', 'done');
+                localStorage.setItem('onboarding-ai-step', 'pending');
+                showToast('Great. Now let’s teach the AI about your brand.', 'info');
+                switchPage('ai-profile');
+            }
         } else {
             throw new Error(result.error || 'Save failed');
         }

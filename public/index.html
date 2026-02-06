@@ -576,8 +576,61 @@
                             </div>
                             <h3 class="chat-detail-empty-title">Select a conversation</h3>
                             <p class="chat-detail-empty-hint">Choose a chat from the list to view messages</p>
-                        </div>
-                    </main>
+        </div>
+        </main>
+
+        <!-- Disconnected / Getting Started Overlay -->
+        <div id="onboarding-overlay" class="onboarding-overlay" style="display: none;">
+            <div class="onboarding-card">
+                <div class="onboarding-header">
+                    <div class="onboarding-icon">💡</div>
+                    <div>
+                        <div class="onboarding-title">Get your WhatsApp Business connected</div>
+                        <div class="onboarding-subtitle">A quick 3‑step guide before you scan the QR code.</div>
+                    </div>
+                </div>
+
+                <div class="onboarding-steps">
+                    <div class="onboarding-step">
+                        <span class="onboarding-step-number">1</span>
+                        <p class="onboarding-step-text">
+                            If you haven’t already, create a <strong>WhatsApp Business</strong> account on your phone
+                            (recommended) or use your existing one.
+                        </p>
+                    </div>
+                    <div class="onboarding-step">
+                        <span class="onboarding-step-number">2</span>
+                        <p class="onboarding-step-text">
+                            On another device (laptop or desktop), open this dashboard link in a browser so you can see
+                            the QR code screen comfortably.
+                        </p>
+                    </div>
+                    <div class="onboarding-step">
+                        <span class="onboarding-step-number">3</span>
+                        <p class="onboarding-step-text">
+                            On your phone, open <strong>WhatsApp Business &gt; Linked Devices</strong>, tap
+                            <strong>Link a Device</strong>, then point your camera at the QR code that appears here.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="onboarding-footer">
+                    <p class="onboarding-note">
+                        Once you’re connected, this guide disappears and your live WhatsApp analytics, chats, and
+                        campaigns will start updating automatically.
+                    </p>
+                    <div class="onboarding-actions">
+                        <button class="onboarding-primary" onclick="window.handleGetStarted()">
+                            Get started
+                            <span style="font-size: 1rem;">→</span>
+                        </button>
+                        <button class="onboarding-secondary" onclick="window.handleGetStarted()">
+                            Skip and go to QR
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
                 </div>
             </div>
 
@@ -894,6 +947,151 @@
                             </div>
                             <button id="run-migration-btn" class="btn-primary"
                                 style="background: #f59e0b; border: none;">Run Migrations</button>
+                        </div>
+
+                    </div>
+
+                    <!-- Calendar & Scheduling Section -->
+                    <div class="settings-section calendar-settings-section">
+                        <div class="calendar-glow"></div>
+                        <div class="settings-section-header calendar-section-header">
+                            <div class="settings-icon calendar-section-icon">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+                                    <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2zM9 14H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zm-8 4H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3>Calendar & Scheduling</h3>
+                                <p>Let customers book meetings via WhatsApp — powered by Google Calendar</p>
+                            </div>
+                        </div>
+                        <div class="calendar-settings-body">
+                            <div class="calendar-subsection">
+                                <div class="calendar-subsection-title">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10z"/></svg>
+                                    Calendar Connection
+                                </div>
+                                <div class="calendar-field-group">
+                                    <label class="calendar-field-label">
+                                        <svg class="calendar-field-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10z"/></svg>
+                                        Google Calendar ID
+                                    </label>
+                                    <input type="text" id="google-calendar-id" class="calendar-field-input" placeholder="your.email@gmail.com"
+                                        title="Your Gmail or Google Workspace address linked to the calendar">
+                                </div>
+                            </div>
+
+                            <div class="calendar-subsection">
+                                <div class="calendar-subsection-title">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                                    Working Hours
+                                </div>
+                                <div class="calendar-row">
+                                    <div class="calendar-field-group">
+                                        <label class="calendar-field-label">
+                                            <svg class="calendar-field-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM9 10H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z"/></svg>
+                                            Work Start
+                                        </label>
+                                        <input type="text" id="working-hours-start" class="calendar-field-input" placeholder="09:00" maxlength="5"
+                                            title="24h format, e.g. 09:00">
+                                    </div>
+                                    <div class="calendar-field-group">
+                                        <label class="calendar-field-label">
+                                            <svg class="calendar-field-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm-1-10H7v2h4V12zm4 4h-4v2h4v-2zm-4-6H7v2h4V8z"/></svg>
+                                            Work End
+                                        </label>
+                                        <input type="text" id="working-hours-end" class="calendar-field-input" placeholder="18:00" maxlength="5"
+                                            title="24h format, e.g. 18:00">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="calendar-subsection">
+                                <div class="calendar-subsection-title">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42C16.07 4.74 14.12 4 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+                                    Meeting Rules
+                                </div>
+                                <div class="calendar-row">
+                                    <div class="calendar-field-group">
+                                        <label class="calendar-field-label">
+                                            <svg class="calendar-field-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                                            Min Duration (min)
+                                        </label>
+                                        <input type="number" id="min-meeting-duration" class="calendar-field-input" placeholder="10" min="5" max="120">
+                                    </div>
+                                    <div class="calendar-field-group">
+                                        <label class="calendar-field-label">
+                                            <svg class="calendar-field-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm4 11h-4v4h-2v-4H8v-2h2V7h2v4h4v2z"/></svg>
+                                            Buffer (min)
+                                        </label>
+                                        <input type="number" id="buffer-time" class="calendar-field-input" placeholder="15" min="0" max="60"
+                                            title="Gap between meetings">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="calendar-subsection">
+                                <div class="calendar-subsection-title">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/></svg>
+                                    Availability
+                                </div>
+                                <div class="calendar-field-group">
+                                    <div class="booking-days-header">
+                                        <label class="calendar-field-label">Booking Days</label>
+                                        <div class="booking-days-presets">
+                                            <button type="button" class="preset-pill" data-preset="weekdays">Weekdays</button>
+                                            <button type="button" class="preset-pill" data-preset="weekends">Weekends</button>
+                                            <button type="button" class="preset-pill" data-preset="all">All Days</button>
+                                        </div>
+                                    </div>
+                                    <div class="booking-days-pills" id="booking-days-pills">
+                                        <button type="button" class="booking-day-pill" data-day="1">Mon</button>
+                                        <button type="button" class="booking-day-pill" data-day="2">Tue</button>
+                                        <button type="button" class="booking-day-pill" data-day="3">Wed</button>
+                                        <button type="button" class="booking-day-pill" data-day="4">Thu</button>
+                                        <button type="button" class="booking-day-pill" data-day="5">Fri</button>
+                                        <button type="button" class="booking-day-pill" data-day="6">Sat</button>
+                                        <button type="button" class="booking-day-pill" data-day="7">Sun</button>
+                                    </div>
+                                    <input type="hidden" id="booking-days" value="1,2,3,4,5">
+                                </div>
+                            </div>
+
+                            <!-- Calendar Access Control -->
+                            <div class="calendar-subsection access-control-subsection">
+                                <div class="calendar-subsection-title">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+                                    Access Control
+                                </div>
+                                <div class="calendar-field-group" style="gap: 20px;">
+                                    <div style="flex: 1;">
+                                        <div class="setting-label">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="opacity: 0.6;">
+                                                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/>
+                                            </svg>
+                                            <div>
+                                                <label style="margin-bottom: 4px; display: block;">Enable Calendar Access</label>
+                                                <p style="font-size: 0.85rem; opacity: 0.7; margin: 0;">Allow users to schedule meetings and check availability</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <label class="toggle-switch" style="margin-top: 8px;">
+                                        <input type="checkbox" id="calendar-access-toggle">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <div id="calendar-access-status" style="margin-top: 12px; padding: 10px; border-radius: 8px; background: var(--bg-light); font-size: 0.9rem; color: var(--text-secondary);">
+                                    <span id="access-status-text">Loading status...</span>
+                                </div>
+                            </div>
+
+                            <div class="calendar-save-wrap">
+                                <button id="save-calendar-settings-btn" class="calendar-save-btn">
+                                    <span class="btn-spinner" aria-hidden="true"></span>
+                                    <span class="btn-text">Save Calendar Settings</span>
+                                    <span class="btn-icon">✓</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 

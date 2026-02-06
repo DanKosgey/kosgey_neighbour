@@ -739,3 +739,158 @@
         font-size: 0.8rem;
     }
 }
+
+/* Onboarding overlay shown when WhatsApp is disconnected */
+.onboarding-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: radial-gradient(circle at top, rgba(59, 130, 246, 0.18), transparent 55%),
+        radial-gradient(circle at bottom, rgba(236, 72, 153, 0.14), rgba(15, 23, 42, 0.96));
+    backdrop-filter: blur(18px);
+}
+
+.onboarding-card {
+    max-width: 720px;
+    width: 100%;
+    background: rgba(15, 23, 42, 0.92);
+    border-radius: 24px;
+    padding: 2rem 2.25rem;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    box-shadow: 0 24px 80px rgba(15, 23, 42, 0.85);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .onboarding-card {
+    background: rgba(248, 250, 252, 0.98);
+}
+
+.onboarding-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.onboarding-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #22c55e, #3b82f6);
+    color: white;
+    font-size: 1.5rem;
+}
+
+.onboarding-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+}
+
+.onboarding-subtitle {
+    margin-top: 0.25rem;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.onboarding-steps {
+    margin: 1.5rem 0 2rem 0;
+    display: grid;
+    gap: 0.9rem;
+}
+
+.onboarding-step {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+}
+
+.onboarding-step-number {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: rgba(59, 130, 246, 0.18);
+    color: #bfdbfe;
+    flex-shrink: 0;
+}
+
+[data-theme="light"] .onboarding-step-number {
+    background: rgba(59, 130, 246, 0.12);
+    color: #1d4ed8;
+}
+
+.onboarding-step-text {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+.onboarding-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.onboarding-note {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    max-width: 360px;
+}
+
+.onboarding-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.onboarding-primary {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border-radius: 999px;
+    padding: 0.7rem 1.6rem;
+    border: none;
+    color: white;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 12px 30px rgba(22, 163, 74, 0.55);
+}
+
+.onboarding-secondary {
+    background: transparent;
+    border-radius: 999px;
+    padding: 0.7rem 1.2rem;
+    border: 1px solid rgba(148, 163, 184, 0.8);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+@media (max-width: 640px) {
+    .onboarding-card {
+        padding: 1.75rem 1.5rem;
+    }
+
+    .onboarding-title {
+        font-size: 1.35rem;
+    }
+
+    .onboarding-footer {
+        flex-direction: column-reverse;
+        align-items: flex-start;
+    }
+}

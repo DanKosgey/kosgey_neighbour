@@ -217,6 +217,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 1.5rem;
+    padding-bottom: 1.5rem;
 }
 
 .product-card {
@@ -719,6 +720,8 @@
         position: static;
         top: auto;
         padding: 1.5rem;
+        margin-bottom: 3.5rem;
+        /* breathing room above mobile nav */
     }
 
     .products-view {

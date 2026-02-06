@@ -21,9 +21,22 @@
     overflow-x: auto;
     /* Scrollable horizontally */
     -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    scroll-snap-type: x mandatory;
     gap: 0.5rem;
     align-items: center;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+    
+    /* Fade effect on right side */
+    mask-image: linear-gradient(90deg, 
+        rgba(0, 0, 0, 1) 0%, 
+        rgba(0, 0, 0, 1) 85%, 
+        rgba(0, 0, 0, 0) 100%);
+    -webkit-mask-image: linear-gradient(90deg, 
+        rgba(0, 0, 0, 1) 0%, 
+        rgba(0, 0, 0, 1) 85%, 
+        rgba(0, 0, 0, 0) 100%);
+    mask-composite: intersect;
 }
 
 .mobile-nav::-webkit-scrollbar {
@@ -37,8 +50,8 @@
     justify-content: center;
     min-width: 65px;
     /* Ensure touch target size */
-    flex: 1;
-    /* Distribute space */
+    flex: 0 0 auto;
+    /* Don't flex, maintain size */
     color: var(--text-secondary);
     text-decoration: none;
     font-size: 0.7rem;
@@ -47,6 +60,8 @@
     border-radius: 8px;
     transition: all 0.2s ease;
     white-space: nowrap;
+    scroll-snap-align: center;
+    scroll-snap-stop: auto;
 }
 
 .mobile-nav-item.active {
@@ -151,6 +166,17 @@
         /* Space for nav */
         z-index: 100 !important;
         /* Below mobile nav (2000) */
+    }
+
+    /* Shops Page Mobile Overrides */
+    #shops-page {
+        padding-bottom: 120px !important;
+        /* Extra space so Add Product / empty-state clears mobile nav */
+        z-index: 100 !important;
+    }
+
+    #products-view {
+        padding-bottom: 40px !important;
     }
 
     .marketing-sidebar {

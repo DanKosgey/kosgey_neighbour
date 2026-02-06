@@ -11,6 +11,7 @@ import * as ownerTools from './ownerTools';
 import { webScraper } from '../webScraper';
 import { googleImageGenerationService } from '../googleImageGeneration';
 import { marketingCampaigns } from '../../database/schema';
+import { systemSettingsService } from '../systemSettings';
 
 // Deduplication: Track recent tool calls to prevent double-execution
 const recentToolCalls = new Map<string, number>();
@@ -141,6 +142,33 @@ export const AI_TOOLS = [
             {
                 name: "get_analytics",
                 description: "Get conversation analytics for the last 7 days. OWNER ONLY.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {},
+                    required: []
+                }
+            },
+            {
+                name: "enable_calendar_access",
+                description: "Enable calendar access for the agent. Allows the agent to check availability and schedule meetings. OWNER ONLY.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {},
+                    required: []
+                }
+            },
+            {
+                name: "disable_calendar_access",
+                description: "Disable calendar access for the agent. Revokes the agent's ability to check availability or schedule meetings. OWNER ONLY.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {},
+                    required: []
+                }
+            },
+            {
+                name: "get_calendar_access_status",
+                description: "Check the current status of calendar access permissions. OWNER ONLY.",
                 parameters: {
                     type: "OBJECT",
                     properties: {},
@@ -312,11 +340,48 @@ export const AI_TOOLS = [
     }
 ];
 
+/**
+ * Get filtered tools based on user permissions (e.g., calendar access)
+ * Dynamically removes tools that the user doesn't have access to
+ */
+export async function getFilteredTools(calendarAccessEnabled?: boolean) {
+    // If not explicitly provided, check the system setting
+    const hasCalendarAccess = calendarAccessEnabled ?? await systemSettingsService.isCalendarAccessEnabled();
+
+    if (hasCalendarAccess) {
+        // Return all tools
+        return AI_TOOLS;
+    }
+
+    // Filter out calendar-related tools
+    const calendarToolNames = new Set(['check_schedule', 'check_availability', 'schedule_meeting']);
+
+    return [
+        {
+            functionDeclarations: AI_TOOLS[0].functionDeclarations.filter(
+                tool => !calendarToolNames.has(tool.name)
+            )
+        }
+    ];
+}
+
 // Helper to execute tools locally
 export async function executeLocalTool(name: string, args: any, context: any) {
     if (isRecentDuplicate(name, args)) {
         console.warn(`⚠️ Skipping duplicate tool call: ${name} (Args: ${JSON.stringify(args)})`);
         return { error: "Duplicate tool call ignored. Please wait a moment." };
+    }
+
+    // Check if calendar tools are being called without access permission
+    const calendarToolNames = new Set(['check_schedule', 'check_availability', 'schedule_meeting']);
+    if (calendarToolNames.has(name)) {
+        const calendarAccessEnabled = await systemSettingsService.isCalendarAccessEnabled();
+        if (!calendarAccessEnabled) {
+            console.warn(`⚠️ Calendar tool '${name}' called but calendar access is DISABLED`);
+            return {
+                error: "Calendar access is currently disabled. Please contact the owner to re-enable calendar permissions before scheduling meetings."
+            };
+        }
     }
 
     console.log(`🛠️ Executing Tool: ${name}`, args);
@@ -431,6 +496,15 @@ export async function executeLocalTool(name: string, args: any, context: any) {
 
         case 'get_analytics':
             return { result: await ownerTools.getAnalytics() };
+
+        case 'enable_calendar_access':
+            return { result: await ownerTools.enableCalendarAccess() };
+
+        case 'disable_calendar_access':
+            return { result: await ownerTools.disableCalendarAccess() };
+
+        case 'get_calendar_access_status':
+            return { result: await ownerTools.getCalendarAccessStatus() };
 
         case 'check_availability':
             try {

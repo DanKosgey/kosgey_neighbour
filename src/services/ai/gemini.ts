@@ -1,8 +1,9 @@
 import { GoogleGenerativeAI, GenerativeModel, FunctionCall } from '@google/generative-ai';
 import { config } from '../../config/env';
 import { SYSTEM_PROMPTS } from './prompts';
-import { AI_TOOLS } from './tools';
+import { AI_TOOLS, getFilteredTools } from './tools';
 import { keyManager } from '../keyManager';
+import { systemSettingsService } from '../systemSettings';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -262,7 +263,8 @@ export class GeminiService {
     isOwner: boolean,
     aiProfile?: AIProfile,
     userProfile?: UserProfile,
-    customPrompt?: string
+    customPrompt?: string,
+    calendarAccessEnabled?: boolean
   ): string {
     let systemPrompt: string;
 
@@ -312,6 +314,14 @@ export class GeminiService {
     const dayString = now.toLocaleDateString('en-US', { timeZone: timezone, weekday: 'long' });
 
     systemPrompt += `\n\n=== TEMPORAL CONTEXT ===\nCURRENT DATE/TIME: ${dayString}, ${timeString} (${timezone})\nINSTRUCTION: You are aware of the current time. If you CHOOSE to greet, ensure it matches the time of day. However, DO NOT greet in every message. If the conversation is ongoing or the query is direct, reply directly without a greeting.`;
+
+    // Inject Calendar Access Status
+    const calendarAccessStatus = calendarAccessEnabled !== false;
+    systemPrompt += `\n\n=== PERMISSIONS STATUS ===\ncalendar_access: ${calendarAccessStatus}${
+      !calendarAccessStatus
+        ? '\n⚠️ CRITICAL: Calendar access is currently DISABLED. If the user asks to check availability, schedule meetings, or do anything calendar-related, you MUST politely inform them: "I\'m currently unable to access calendar functions. Calendar permissions have been disabled. Please ask the owner to re-enable calendar access before I can help with scheduling."'
+        : ''
+    }`;
 
     // Apply response length constraint
     if (aiProfile?.responseLength === 'short') {
@@ -421,20 +431,27 @@ ${history.join('\n')}
     customPrompt?: string
   ): Promise<GeminiResponse> {
     try {
+      // Check calendar access permission
+      const calendarAccessEnabled = await systemSettingsService.isCalendarAccessEnabled();
+
       const systemPrompt = this._buildSystemPrompt(
         userContext,
         isOwner,
         aiProfile,
         userProfile,
-        customPrompt
+        customPrompt,
+        calendarAccessEnabled
       );
 
       const fullPrompt = this._buildConversationPrompt(systemPrompt, history);
 
+      // Get filtered tools based on calendar access
+      const availableTools = await getFilteredTools(calendarAccessEnabled);
+
       return await this.executeWithRetry(async (model) => {
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-          tools: AI_TOOLS as any,
+          tools: availableTools as any,
         });
 
         const response = result.response;

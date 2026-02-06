@@ -7,6 +7,7 @@ import { db } from '../../database';
 import { contacts, messageLogs } from '../../database/schema';
 import { desc, sql, eq, and, gte } from 'drizzle-orm';
 import { rateLimitManager } from '../rateLimitManager';
+import { systemSettingsService } from '../systemSettings';
 
 /**
  * Generate daily summary of conversations
@@ -205,4 +206,43 @@ function getTimeAgo(date: Date | null): string {
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
     return `${Math.floor(seconds / 86400)}d ago`;
+}
+/**
+ * Enable calendar access for the agent
+ */
+export async function enableCalendarAccess(): Promise<string> {
+    try {
+        await systemSettingsService.enableCalendarAccess();
+        return `✅ Calendar access has been ENABLED.\n\nThe agent can now:\n- Check your calendar availability\n- View your schedule\n- Book meetings\n\nCalendarScheduling tools are now available in the agent's toolset.`;
+    } catch (error: any) {
+        console.error('Failed to enable calendar access:', error);
+        return `❌ Error enabling calendar access: ${error.message}`;
+    }
+}
+
+/**
+ * Disable calendar access for the agent
+ */
+export async function disableCalendarAccess(): Promise<string> {
+    try {
+        await systemSettingsService.disableCalendarAccess();
+        return `🔒 Calendar access has been DISABLED.\n\nThe agent can NO LONGER:\n- Check your calendar availability\n- View your schedule\n- Book meetings\n\nCalendar scheduling tools have been revoked from the agent's toolset. When customers ask to schedule meetings, the agent will inform them that calendar access is currently unavailable.`;
+    } catch (error: any) {
+        console.error('Failed to disable calendar access:', error);
+        return `❌ Error disabling calendar access: ${error.message}`;
+    }
+}
+
+/**
+ * Get current calendar access status
+ */
+export async function getCalendarAccessStatus(): Promise<string> {
+    try {
+        const isEnabled = await systemSettingsService.isCalendarAccessEnabled();
+        const status = isEnabled ? '✅ ENABLED' : '🔒 DISABLED';
+        return `📅 Calendar Access Status: ${status}\n\nThe database currently has calendar access set to: ${isEnabled ? 'enabled' : 'disabled'}.\n\nUse "enable calendar" or "disable calendar" to change this setting.`;
+    } catch (error: any) {
+        console.error('Failed to get calendar access status:', error);
+        return `❌ Error retrieving calendar access status: ${error.message}`;
+    }
 }

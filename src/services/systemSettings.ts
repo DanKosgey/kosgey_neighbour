@@ -82,6 +82,38 @@ export class SystemSettingsService {
         if (!this.loaded) await this.loadSettings();
         return Object.fromEntries(this.cache);
     }
+
+    /**
+     * Get calendar access permission status
+     */
+    async isCalendarAccessEnabled(): Promise<boolean> {
+        const val = await this.get('calendar_access_enabled', 'true');
+        return (val ?? 'true').toLowerCase() === 'true';
+    }
+
+    /**
+     * Enable calendar access
+     */
+    async enableCalendarAccess(): Promise<void> {
+        await this.set(
+            'calendar_access_enabled',
+            'true',
+            'Global toggle for calendar scheduling tools'
+        );
+        console.log('✅ Calendar access ENABLED');
+    }
+
+    /**
+     * Disable calendar access
+     */
+    async disableCalendarAccess(): Promise<void> {
+        await this.set(
+            'calendar_access_enabled',
+            'false',
+            'Global toggle for calendar scheduling tools'
+        );
+        console.log('✅ Calendar access DISABLED');
+    }
 }
 
 export const systemSettingsService = new SystemSettingsService();

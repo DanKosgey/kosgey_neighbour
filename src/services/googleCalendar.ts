@@ -1,31 +1,11 @@
 import { google } from 'googleapis';
-import { config } from '../config/env';
 import path from 'path';
+import { systemSettingsService } from './systemSettings';
 
 export class GoogleCalendarService {
     private calendar: any;
-    private calendarId: string;
-    private workingHoursStart: string;
-    private workingHoursEnd: string;
-    private minMeetingDuration: number;
-    private bufferTime: number;
-    private bookingDays: number[];
 
     constructor() {
-        this.calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
-
-        console.log(`📅 Google Calendar Service Initialized with ID: "${this.calendarId}"`);
-
-        // Scheduling configuration from environment
-        this.workingHoursStart = process.env.WORKING_HOURS_START || '09:00';
-        this.workingHoursEnd = process.env.WORKING_HOURS_END || '18:00';
-        this.minMeetingDuration = parseInt(process.env.MIN_MEETING_DURATION || '10');
-        this.bufferTime = parseInt(process.env.BUFFER_TIME || '15');
-        this.bookingDays = process.env.BOOKING_DAYS
-            ? process.env.BOOKING_DAYS.split(',').map(d => parseInt(d.trim()))
-            : [1, 2, 3, 4, 5]; // Mon-Fri by default
-
-
         // Path to your service account key file
         const keyFilePath = path.join(process.cwd(), 'service-account.json');
 
@@ -41,10 +21,39 @@ export class GoogleCalendarService {
 
         const auth = new google.auth.GoogleAuth({
             keyFile: keyFilePath,
-            scopes: ['https://www.googleapis.com/auth/calendar.events'], // Upgraded from readonly
+            scopes: ['https://www.googleapis.com/auth/calendar.events'],
         });
 
         this.calendar = google.calendar({ version: 'v3', auth });
+        console.log('📅 Google Calendar Service initialized (config from Settings page)');
+    }
+
+    /** Load calendar & scheduling config from database settings (configurable in Settings page) */
+    private async getCalendarConfig(): Promise<{
+        calendarId: string;
+        workingHoursStart: string;
+        workingHoursEnd: string;
+        minMeetingDuration: number;
+        bufferTime: number;
+        bookingDays: number[];
+    }> {
+        const calendarId = (await systemSettingsService.get('google_calendar_id')) || 'primary';
+        const workingHoursStart = (await systemSettingsService.get('working_hours_start')) || '09:00';
+        const workingHoursEnd = (await systemSettingsService.get('working_hours_end')) || '18:00';
+        const minMeetingDuration = await systemSettingsService.getNumber('min_meeting_duration', 10);
+        const bufferTime = await systemSettingsService.getNumber('buffer_time', 15);
+        const bookingDaysStr = await systemSettingsService.get('booking_days');
+        const bookingDays = bookingDaysStr
+            ? bookingDaysStr.split(',').map(d => parseInt(d.trim())).filter(n => !isNaN(n))
+            : [1, 2, 3, 4, 5];
+        return {
+            calendarId,
+            workingHoursStart,
+            workingHoursEnd,
+            minMeetingDuration: minMeetingDuration ?? 10,
+            bufferTime: bufferTime ?? 15,
+            bookingDays: bookingDays.length > 0 ? bookingDays : [1, 2, 3, 4, 5],
+        };
     }
 
     async listEvents(dateSpecifier: string): Promise<string> {
@@ -53,14 +62,13 @@ export class GoogleCalendarService {
         }
 
         try {
-            // Default to UTC for generic list events if no timezone specified in this method header (TODO: Add timezone support to listEvents too?)
-            // For now, let's use system/UTC default
+            const cfg = await this.getCalendarConfig();
             const { timeMin, timeMax } = this.parseDate(dateSpecifier, 'UTC');
 
             console.log(`📅 Fetching events for ${dateSpecifier} (${timeMin.toISOString()} - ${timeMax.toISOString()})`);
 
             const res = await this.calendar.events.list({
-                calendarId: this.calendarId,
+                calendarId: cfg.calendarId,
                 timeMin: timeMin.toISOString(),
                 timeMax: timeMax.toISOString(),
                 singleEvents: true,
@@ -160,7 +168,8 @@ export class GoogleCalendarService {
         }
 
         try {
-            const duration = durationMinutes || this.minMeetingDuration;
+            const cfg = await this.getCalendarConfig();
+            const duration = durationMinutes ?? cfg.minMeetingDuration;
 
             // 1. Determine the timeframe in the desired timezone
             // We use 'toLocaleString' to get the current date in the target timezone
@@ -223,9 +232,8 @@ export class GoogleCalendarService {
             const queryMax = new Date(timeMax.getTime() + 24 * 60 * 60 * 1000);
 
             // Check booking day (Mon-Fri) based on the TARGET timezone's day of week
-            // (We already calculated targetDate in the timezone reference frame)
             const dayOfWeek = targetDate.getDay() || 7;
-            if (!this.bookingDays.includes(dayOfWeek)) {
+            if (!cfg.bookingDays.includes(dayOfWeek)) {
                 return [`No bookings available on ${targetDate.toLocaleDateString('en-US', { weekday: 'long' })}`];
             }
 
@@ -233,7 +241,7 @@ export class GoogleCalendarService {
 
             // Fetch existing events (Broad query)
             const res = await this.calendar.events.list({
-                calendarId: this.calendarId,
+                calendarId: cfg.calendarId,
                 timeMin: queryMin.toISOString(),
                 timeMax: queryMax.toISOString(),
                 singleEvents: true,
@@ -244,8 +252,8 @@ export class GoogleCalendarService {
             const events = res.data.items || [];
 
             // Parse working hours config
-            const [startHour, startMin] = this.workingHoursStart.split(':').map(Number);
-            const [endHour, endMin] = this.workingHoursEnd.split(':').map(Number);
+            const [startHour, startMin] = cfg.workingHoursStart.split(':').map(Number);
+            const [endHour, endMin] = cfg.workingHoursEnd.split(':').map(Number);
 
             // Construct Working Hours Boundaries in Target Timezone (as absolute timestamps)
             // We use the Intl.DateTimeFormat to force the specific time in that timezone
@@ -305,8 +313,8 @@ export class GoogleCalendarService {
                     const slotEndMins = slotStartMins + duration;
 
                     // Buffer
-                    const bufferedEvtStart = evtStartMins - this.bufferTime;
-                    const bufferedEvtEnd = evtEndMins + this.bufferTime;
+                    const bufferedEvtStart = evtStartMins - cfg.bufferTime;
+                    const bufferedEvtEnd = evtEndMins + cfg.bufferTime;
 
                     return (slotStartMins < bufferedEvtEnd && slotEndMins > bufferedEvtStart);
                 });
@@ -371,6 +379,7 @@ export class GoogleCalendarService {
         }
 
         try {
+            const cfg = await this.getCalendarConfig();
             // Parse date and time in context of the timezone
             // "2024-05-20" + "14:30" + "Africa/Nairobi" -> ISO String with correct offset
             // We use the ID-based timezone for the event creation which Google Calendar API supports natively!
@@ -446,11 +455,11 @@ Scheduled via WhatsApp AI Agent`,
 
             // Create the event (try with Google Meet first, fallback without if it fails)
             let response;
-            console.log(`🔍 Inserting event into calendar: "${this.calendarId}"`);
+            console.log(`🔍 Inserting event into calendar: "${cfg.calendarId}"`);
 
             try {
                 response = await this.calendar.events.insert({
-                    calendarId: this.calendarId,
+                    calendarId: cfg.calendarId,
                     resource: event,
                     conferenceDataVersion: 1, // Required for Google Meet link generation
                 });
@@ -459,7 +468,7 @@ Scheduled via WhatsApp AI Agent`,
                 console.log('⚠️  Google Meet creation failed, creating event without conference link...');
                 const { conferenceData, ...eventWithoutConference } = event;
                 response = await this.calendar.events.insert({
-                    calendarId: this.calendarId,
+                    calendarId: cfg.calendarId,
                     resource: eventWithoutConference,
                 });
             }
