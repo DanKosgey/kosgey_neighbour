@@ -469,6 +469,11 @@ export class WhatsAppClient {
               jid,
               { replyText: text }
             );
+
+            // 🎯 Generate AI response for group replies (with API key rotation)
+            if (jid.includes('@g.us')) {
+              await this.handleGroupAdReplyResponse(jid, msg, text);
+            }
           }
 
           await this.handleIncomingMessage(msg);
@@ -477,6 +482,68 @@ export class WhatsAppClient {
         }
       }
     });
+  }
+
+  /**
+   * Handle replies to ads in groups - generates AI response using key rotation
+   * ✨ Uses geminiService which automatically rotates API keys
+   */
+  private async handleGroupAdReplyResponse(groupJid: string, msg: any, replyText: string) {
+    try {
+      const userPhone = msg.key.participant?.split('@')[0] || 'Unknown';
+      console.log(`💬 Processing group ad reply from ${userPhone}: "${replyText}"`);
+
+      // Check if we should respond (respect rate limits for non-owners)
+      if (rateLimitManager.isLimited() && !ownerService.isOwner(userPhone)) {
+        console.log(`⏸️ Rate limited, not responding to ${userPhone}`);
+        return;
+      }
+
+      // 🔄 Generate AI response (with automatic API key rotation via geminiService)
+      const { geminiService } = await import('../services/ai/gemini');
+      
+      const systemPrompt = `You are a helpful assistant responding to a customer inquiry about a product/service ad in a WhatsApp group.
+Keep response concise (1-2 sentences max).
+Be friendly and professional.
+If they ask for more info, suggest they contact via direct message.`;
+
+      const fullPrompt = `${systemPrompt}
+
+Customer question: "${replyText}"
+
+Your response:`;
+
+      // 🔑 This uses keyManager internally with automatic rotation
+      const response = await geminiService.generateText(fullPrompt);
+
+      if (!response || response.trim().length === 0) {
+        console.warn('⚠️ AI generated empty response, skipping group reply');
+        return;
+      }
+
+      // 📧 Send reply to group (quoted to original reply)
+      if (this.sock) {
+        console.log(`📤 Sending group reply to ${groupJid}...`);
+        const sentMsg = await this.sock.sendMessage(groupJid, {
+          text: response,
+          quoted: msg
+        });
+
+        if (sentMsg?.key?.id) {
+          console.log(`✅ Group reply sent successfully (ID: ${sentMsg.key.id})`);
+        }
+      }
+    } catch (error: any) {
+      // Check if it's a rate limit error
+      if (error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED')) {
+        console.warn(`⏸️ API rate limited during group reply. Will retry next message.`);
+        // keyManager handles rate limiting internally in geminiService
+      } else if (error.message?.includes('ALL_KEYS_EXHAUSTED')) {
+        console.error(`🔴 All API keys exhausted. Cannot respond to group replies.`);
+      } else {
+        console.error(`❌ Error generating group reply: ${error.message}`);
+      }
+    }
   }
 
   private async handleIncomingMessage(msg: any) {
