@@ -336,13 +336,13 @@ Less is more. Bold and simple beats complex and detailed.`;
 
     private async generateAdCopy(profile: any, style: VisualStyle, timeContext: TimeOfDay, framework: PitchFramework, customInstructions?: string, campaignName?: string, businessDescription?: string | null, companyLink?: string | null): Promise<any> {
         // Prioritize businessDescription as the primary context
-        const businessContext = businessDescription || `Brand: ${profile.productInfo}, Industry: ${profile.targetAudience}. USP: ${profile.uniqueSellingPoint}. Voice: ${profile.brandVoice}`;
+        const businessContext = businessDescription || `Campaign Platform: ${profile.productInfo}, Target Voters: ${profile.targetAudience}. Unique Strength: ${profile.uniqueSellingPoint}. Voice: ${profile.brandVoice || 'inspiring and authentic'}`;
 
         const frameworkInstructions = this.getFrameworkInstructions(framework);
         const { persona, angle } = this.getRandomCreativeAngle();
-        const campContext = campaignName ? `Campaign Theme: "${campaignName}"` : "";
+        const campContext = campaignName ? `Campaign: "${campaignName}"` : "";
 
-        const linkInstruction = companyLink ? `\n        CONTEXT: The company website is: ${companyLink}. Ensure the CTA drives traffic there.` : "";
+        const linkInstruction = companyLink ? `\n        CONTEXT: Campaign website/social media: ${companyLink}. Encourage voters to visit for more information.` : "";
 
         let instructionBlock = "";
         if (customInstructions) {
@@ -350,28 +350,29 @@ Less is more. Bold and simple beats complex and detailed.`;
             CRITICAL OVERRIDE INSTRUCTIONS:
             The user has explicitly requested: "${customInstructions}".
             You MUST IGNORE the standard style/framework rules if they conflict with this.
-            Focus ENTIRELY on fulfilling this specific request while maintaining the brand voice.
+            Focus ENTIRELY on fulfilling this specific request while maintaining the campaign voice.
             `;
         }
 
-        const prompt = `You are a World-Class Copywriter adopting the persona of '${persona}'.
+        const prompt = `You are a World-Class Political Campaign Strategist and Copywriter for Kenya 2027 Elections, adopting the persona of '${persona}'.
         
-        BUSINESS CONTEXT (PRIMARY):
+        CAMPAIGN CONTEXT (PRIMARY):
         ${businessContext}
         ${linkInstruction}
         
-        Task: Write a *hypershort*, edgy WhatsApp ad.
+        Task: Write a *hypershort*, powerful WhatsApp campaign message for voters.
         ${campContext}
         Time: ${timeContext}
         
         CRITICAL RULES (STRICT):
         1. **LENGTH**: MAXIMUM 1-2 SENTENCES total for the body. This is a hard limit.
-        2. **STYLE**: "Random cool shit". Be punchy, witty, unexpected, and high energy.
-        3. **NO FLUFF**: No "Good morning", no "Hello", no "Attention". Jump straight into the hook.
+        2. **STYLE**: Inspiring, authentic, and action-oriented. Focus on hope, change, and empowerment.
+        3. **NO FLUFF**: No "Good morning", no "Hello", no "Attention". Jump straight into the message.
         4. **FORMAT**: 
-           - Headline: 4 words max. Punchy.
-           - Body: 1-2 short, impactful sentences.
-           - CTA: Short and direct.
+           - Headline: 4 words max. Powerful and memorable.
+           - Body: 1-2 short, impactful sentences about policy, vision, or call to action.
+           - CTA: Direct call to action (e.g., "Join the movement", "Vote for change", "Spread the word").
+        5. **POLITICAL CONTEXT**: This is for Kenya 2027 elections. Be respectful, inspiring, and focused on positive change.
         
         CREATIVE ANGLE: ${angle}
         
@@ -380,9 +381,10 @@ Less is more. Bold and simple beats complex and detailed.`;
         ${instructionBlock}
 
         Guidelines:
-        - 🎯 BUSINESS-FIRST: Use the Business Context above.
+        - 🎯 CAMPAIGN-FIRST: Use the Campaign Context above.
         - 🛑 STRICTLY 1-2 SENTENCES. Less is more.
-        - Include 1-2 relevant emojis.
+        - Include 1-2 relevant emojis (🇰🇪 for Kenya, ✊ for solidarity, 🗳️ for voting, etc.).
+        - NO commercial/sales language. Focus on political engagement and voter mobilization.
         - Return a SINGLE JSON object with keys: 'headline', 'body', 'cta'.
         - Do NOT wrap in markdown code blocks. Just raw JSON if possible.`;
 
@@ -402,16 +404,16 @@ Less is more. Bold and simple beats complex and detailed.`;
 
     private getFrameworkInstructions(framework: PitchFramework): string {
         const instructions: Record<PitchFramework, string> = {
-            [PitchFramework.PAS]: "Use Problem-Agitate-Solution: Start with the pain point, intensify it, then offer your product as the relief.",
-            [PitchFramework.AIDA]: "Use Attention-Interest-Desire-Action: Grab attention, build interest, create desire, end with clear action.",
-            [PitchFramework.STORY]: "Tell a customer journey story: Before they found you, the transformation, the happy ending.",
-            [PitchFramework.FOMO]: "Create urgency: Limited time, scarcity, exclusive offer, fear of missing out.",
-            [PitchFramework.VALUE]: "Show value comparison: Price justification, what they get vs competitors, ROI focus.",
-            [PitchFramework.SOCIAL_PROOF]: "Lead with social proof: Reviews, testimonials, number of happy customers, popularity.",
-            [PitchFramework.EDUCATIONAL]: "Educate first: Share tips, how-tos, insights, then subtly introduce product as solution.",
-            [PitchFramework.EMOTIONAL]: "Appeal to identity and emotion: Belonging, status, self-image, aspirations.",
-            [PitchFramework.CHALLENGE]: "Start with a challenge or surprising statement: 'Can you believe...', 'Most people don't know...'",
-            [PitchFramework.QUESTION]: "Lead with engaging questions that make them think, then answer with your product."
+            [PitchFramework.PAS]: "Use Problem-Agitate-Solution: Start with the challenge facing voters, intensify it, then present the candidate's solution.",
+            [PitchFramework.AIDA]: "Use Attention-Interest-Desire-Action: Grab attention, build interest in the platform, create desire for change, end with clear call to action.",
+            [PitchFramework.STORY]: "Tell a compelling story: The current situation, the vision for change, the better future we can build together.",
+            [PitchFramework.FOMO]: "Create urgency: This is our moment, this election matters, be part of the change, don't miss this opportunity.",
+            [PitchFramework.VALUE]: "Show the value: What voters will gain, how life will improve, comparison with failed promises of others.",
+            [PitchFramework.SOCIAL_PROOF]: "Lead with momentum: Growing support, community backing, testimonials from supporters, grassroots movement.",
+            [PitchFramework.EDUCATIONAL]: "Educate voters: Share policy details, explain the plan, provide insights, then call them to join the movement.",
+            [PitchFramework.EMOTIONAL]: "Appeal to identity and hope: Belonging to a movement, pride in our nation, vision for our children, shared aspirations.",
+            [PitchFramework.CHALLENGE]: "Start with a bold statement: 'Enough is enough', 'We deserve better', 'The time for change is now'.",
+            [PitchFramework.QUESTION]: "Lead with powerful questions: 'Are you ready for change?', 'What future do we want?', then answer with the campaign vision."
         };
         return instructions[framework];
     }
@@ -422,18 +424,18 @@ Less is more. Bold and simple beats complex and detailed.`;
         if (typeof adJson === 'string') {
             // If AI returned plain text, append DM and link at the end
             let plainOutput = adJson;
-            plainOutput += `\n\n📩 DM me to book a call or for details`;
+            plainOutput += `\n\n📩 DM for more information or to volunteer`;
             if (companyLink) {
                 plainOutput += `\n🔗 ${companyLink}`;
             }
             return plainOutput;
         }
 
-        let output = `*${adJson.headline || 'Special Offer'}*\n\n`;
+        let output = `*${adJson.headline || 'Join the Movement'}*\n\n`;
         output += `${adJson.body}\n\n`;
 
-        let cta = `👉 ${adJson.cta || 'Reply to learn more!'}`;
-        cta += `\n📩 DM me to book a call or for details`; // Updated instruction
+        let cta = `👉 ${adJson.cta || 'Join us today!'}`;
+        cta += `\n📩 DM for more information or to volunteer`;
         if (companyLink) {
             cta += `\n🔗 ${companyLink}`;
         }

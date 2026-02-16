@@ -27,7 +27,7 @@ export class MarketingService {
      */
     public async startOnboarding(contactId: string): Promise<string> {
         this.onboardingSessions.set(contactId, { step: 1, data: {} });
-        return "👋 Welcome to AutoAdsPro! I'm your new AI Marketing Manager.\n\nLet's get your business profile set up so I can start creating ads.\n\nFirst question: **What specifically do you sell?** (Products/Services)";
+        return "👋 Welcome to Campaign Pro! I'm your AI Campaign Manager for Kenya 2027.\n\nLet's set up your campaign profile so I can start broadcasting your message.\n\nFirst question: **What is your main campaign message or platform?** (e.g., Youth Employment, Healthcare Reform, Infrastructure Development)";
     }
 
     /**
@@ -42,20 +42,20 @@ export class MarketingService {
                 session.data.productInfo = message;
                 session.step++;
                 this.onboardingSessions.set(contactId, session);
-                return "Got it. Next: **Who is your ideal target audience?** (e.g., Young professionals, Stay-at-home moms, Tech enthusiasts)";
+                return "Got it. Next: **Who are your target voters?** (e.g., Youth 18-35, Women, Farmers, Urban professionals, Rural communities)";
 
             case 2:
                 session.data.targetAudience = message;
                 session.step++;
                 this.onboardingSessions.set(contactId, session);
-                return "Understood. Last key question: **What is your Unique Selling Point (USP)?** Why should people buy from YOU instead of competitors?";
+                return "Understood. Last key question: **What makes your candidacy unique?** Why should voters choose YOU over other candidates?";
 
             case 3:
                 session.data.uniqueSellingPoint = message;
                 // Finish Onboarding
                 await this.saveBusinessProfile(session.data);
                 this.onboardingSessions.delete(contactId);
-                return "🎉 Awesome! Your business profile is saved.\n\nI will now start analyzing your brand and creating your first campaign schedule.\n\nYou can say 'create campaign' to verify.";
+                return "🎉 Excellent! Your campaign profile is saved.\n\nI will now start preparing your campaign messaging and broadcast schedule.\n\nYou can say 'create campaign' to get started.";
 
             default:
                 return null;
@@ -118,7 +118,7 @@ export class MarketingService {
     ): Promise<string> {
         const hasProductContext = businessContext?.productInfo || (businessContext?.contentSource === 'existing' && (businessContext?.selectedProductId || businessContext?.selectedShopId));
         if (!await this.hasProfile() && (!businessContext || !hasProductContext)) {
-            return "❌ Please complete the onboarding first or provide campaign details (product info or select an item from shops).";
+            return "❌ Please complete the onboarding first or provide campaign details (campaign message or select campaign materials).";
         }
 
         // Check for duplicates
@@ -283,10 +283,11 @@ export class MarketingService {
     public async executeSingleCampaignSlot(client: any, campaign: any, slotType: string, customInstructions?: string) {
         console.log(`🚀 Executing Single Campaign Slot: ${slotType} for '${campaign.name}'`);
         try {
+            // Only handle ad slots for political campaigns
             if (slotType.startsWith('ad')) {
                 await this.handleAdSlot(client, campaign, slotType, customInstructions);
             } else {
-                await this.handleFactSlot(client, slotType, campaign);
+                console.log(`⚠️ Skipping non-ad slot type: ${slotType} (Facts/motivational content disabled for campaign mode)`);
             }
         } catch (e) {
             console.error(`❌ Failed to execute campaign ${campaign.name}:`, e);
@@ -470,44 +471,6 @@ export class MarketingService {
                 console.log('🗑️ Cleaned up temporary image file');
             } catch (e) {
                 console.error('⚠️ Failed to cleanup image:', e);
-            }
-        }
-    }
-
-    private async handleFactSlot(client: any, slot: string, campaign?: any) {
-        const { factService } = await import('./factService');
-
-        let timeOfDay: 'morning' | 'afternoon' | 'evening' = 'morning';
-        if (slot.includes('afternoon')) timeOfDay = 'afternoon';
-        else if (slot.includes('evening')) timeOfDay = 'evening';
-
-        const fact = await factService.getSmartFact(timeOfDay);
-        if (!fact) return;
-
-        const message = `🎲 *Random Fact*\n\n${fact}`;
-
-        // Get groups based on the campaign (if provided), or global fallback
-        const groups = await this.getBroadcastGroups(client, campaign);
-
-        if (groups.length === 0) {
-            console.log('⚠️ No groups found to broadcast fact to');
-            return;
-        }
-
-        console.log(`📢 Broadcasting fact to ${groups.length} groups...`);
-
-        // Send to each group with delay
-        for (const groupJid of groups) {
-            try {
-                await client.sendText(groupJid, message);
-                console.log(`✅ Sent fact to group: ${groupJid}`);
-
-                // Delay between groups to avoid rate limits (consistent with ad broadcasts)
-                if (groups.indexOf(groupJid) < groups.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds
-                }
-            } catch (error) {
-                console.error(`❌ Failed to send fact to group ${groupJid}:`, error);
             }
         }
     }
