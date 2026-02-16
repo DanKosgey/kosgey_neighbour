@@ -1,1 +1,13 @@
-[]
+[
+  {
+    "id": "028g6a",
+    "jid": "120363405794360622@g.us",
+    "messageKey": {
+      "remoteJid": "120363405794360622@g.us",
+      "fromMe": true,
+      "id": "3EB0450593F63514495AB0"
+    },
+    "sentAt": 1771254225588,
+    "ttlMinutes": 30
+  }
+]

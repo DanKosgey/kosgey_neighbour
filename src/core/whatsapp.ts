@@ -336,7 +336,7 @@ export class WhatsAppClient {
     // Track Group Updates
     this.sock.ev.on('groups.update', async (updates) => {
       const { groupService } = await import('../services/groupService');
-      
+
       // Process group updates with rate limiting to avoid 429 errors
       for (const update of updates) {
         try {
@@ -501,7 +501,7 @@ export class WhatsAppClient {
 
       // 🔄 Generate AI response (with automatic API key rotation via geminiService)
       const { geminiService } = await import('../services/ai/gemini');
-      
+
       const systemPrompt = `You are a helpful assistant responding to a customer inquiry about a product/service ad in a WhatsApp group.
 Keep response concise (1-2 sentences max).
 Be friendly and professional.
@@ -640,6 +640,8 @@ Your response:`;
     }
 
     let systemPrompt: string | undefined = undefined;
+
+
 
     if (!contact.isVerified && !isOwner) {
       const currentName = contact.name || contact.originalPushname || 'Unknown';

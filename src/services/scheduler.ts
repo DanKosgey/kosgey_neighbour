@@ -59,7 +59,7 @@ export class SchedulerService {
     private async checkAndExecuteSlots() {
         try {
             // 1. Get Current Time and Timezone
-            let timezone = 'UTC';
+            let timezone = 'Africa/Nairobi'; // Default to Kenya Time
             // Try to find owner timezone (cached or fresh)
             // For efficiency, we might want to cache this, but DB query is fast enough for minutely
             const profile = await db.query.userProfile.findFirst();
@@ -81,7 +81,15 @@ export class SchedulerService {
                 where: eq(marketingCampaigns.status, 'active')
             });
 
-            if (!campaigns.length) return;
+            if (!campaigns.length) {
+                // console.log('No active campaigns found.'); // Optional: reduce noise
+                return;
+            }
+
+            console.log(`🔎 Found ${campaigns.length} active campaigns. Checking schedules...`);
+            campaigns.forEach(c => {
+                console.log(`   - '${c.name}' (ID: ${c.id}) schedule: M=${c.morningTime || '-'}, A=${c.afternoonTime || '-'}, E=${c.eveningTime || '-'}`);
+            });
 
             // 3. Check Each Campaign
             for (const campaign of campaigns) {
