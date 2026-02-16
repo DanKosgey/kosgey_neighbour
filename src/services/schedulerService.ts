@@ -15,11 +15,8 @@ export class SchedulerService {
     // Schedule: [hour, minute, slotType]
     private schedule: Array<{ hour: number; minute: number; slot: string }> = [
         { hour: 7, minute: 0, slot: 'ad_morning' },
-        { hour: 10, minute: 0, slot: 'fact_morning' },
         { hour: 13, minute: 0, slot: 'ad_afternoon' },
-        { hour: 16, minute: 0, slot: 'fact_afternoon' },
-        { hour: 19, minute: 0, slot: 'ad_evening' },
-        { hour: 21, minute: 0, slot: 'fact_evening' }
+        { hour: 19, minute: 0, slot: 'ad_evening' }
     ];
 
     private constructor() { }

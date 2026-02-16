@@ -565,6 +565,48 @@ Format as a cohesive paragraph (150-250 words). Be specific and actionable. Avoi
 });
 
 
+
+// Manual Campaign Trigger Endpoint
+app.post('/api/marketing/trigger-now', async (req, res) => {
+    try {
+        const { campaignId, slotType } = req.body;
+
+        if (!campaignId) {
+            return res.status(400).json({ error: 'campaignId is required' });
+        }
+
+        const { marketingService } = await import('./services/marketing/marketingService');
+
+        // Fetch campaign details
+        const campaign = await db.query.marketingCampaigns.findFirst({
+            where: eq(marketingCampaigns.id, campaignId)
+        });
+
+        if (!campaign) {
+            return res.status(404).json({ error: 'Campaign not found' });
+        }
+
+        const type = slotType || 'ad_manual_trigger';
+
+        if (!whatsappClient || whatsappClient.getStatus().status !== 'CONNECTED') {
+            console.error('❌ WhatsApp client not available/connected for manual trigger');
+            return res.status(503).json({ error: 'WhatsApp client not ready' });
+        }
+
+        console.log(`🚀 Manually triggering campaign: ${campaign.name} (${type})`);
+
+        // Execute asynchronously
+        marketingService.executeSingleCampaignSlot(whatsappClient, campaign, type, "Manual trigger by user")
+            .then(() => console.log(`✅ Manual trigger for ${campaign.name} completed`))
+            .catch(err => console.error(`❌ Manual trigger for ${campaign.name} failed:`, err));
+
+        res.json({ success: true, message: 'Campaign triggered successfully' });
+    } catch (error) {
+        console.error('Failed to trigger campaign:', error);
+        res.status(500).json({ error: 'Failed to trigger campaign' });
+    }
+});
+
 app.post('/api/marketing/campaign', async (req, res) => {
     try {
         const { marketingService } = await import('./services/marketing/marketingService');
