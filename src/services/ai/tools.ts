@@ -818,8 +818,23 @@ export async function executeLocalTool(name: string, args: any, context: any) {
                 const { customCampaignService } = await import('../marketing/customCampaignService');
                 const phone = context?.contact?.phone;
                 if (!phone) return { error: "No contact phone found." };
-                const response = customCampaignService.startSession(phone);
-                return { result: response };
+
+                const sessionPrompt = customCampaignService.startSession(phone);
+
+                // Send the session prompt DIRECTLY to the owner — don't return it to Gemini.
+                // This prevents Gemini from generating its own chatty pre-response in addition
+                // to the session prompt, which would cause the owner to receive two messages.
+                const client = context?.client;
+                if (client) {
+                    if (client.messageSender) {
+                        await client.messageSender.sendText(phone, sessionPrompt);
+                    } else if (client.sock) {
+                        await client.sock.sendMessage(phone, { text: sessionPrompt });
+                    }
+                }
+
+                // _silent: true tells processMessageBatch to suppress Gemini's text reply entirely.
+                return { result: '__CUSTOM_POST_STARTED__', _silent: true };
             } catch (e: any) {
                 return { error: `Custom post failed to start: ${e.message}` };
             }

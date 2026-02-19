@@ -631,6 +631,31 @@ Your response:`;
     }
 
     if (this.messageBuffer) {
+      // --- Custom Campaign Session Intercept ---
+      // If the owner has an active custom post session, handle their message
+      // HERE before it ever gets buffered or sent to the AI queue.
+      // This prevents Gemini from seeing mid-session replies and re-triggering the tool.
+      if (ownerService.isOwner(remoteJid) && text) {
+        try {
+          const { customCampaignService } = await import('../services/marketing/customCampaignService');
+          if (customCampaignService.hasActiveSession(remoteJid)) {
+            console.log(`📢 [CustomCampaign] Intercepting mid-session message from owner, bypassing AI queue`);
+            const campaignResponse = await customCampaignService.handleMessage(remoteJid, text, this);
+            if (campaignResponse !== null) {
+              if (this.messageSender) {
+                await this.messageSender.sendText(remoteJid, campaignResponse);
+              } else if (this.sock) {
+                await this.sock.sendMessage(remoteJid, { text: campaignResponse });
+              }
+              return; // Do NOT add to buffer — message is fully handled
+            }
+          }
+        } catch (e: any) {
+          console.error('[CustomCampaign] Early intercept failed:', e.message);
+        }
+      }
+      // --- End Custom Campaign Intercept ---
+
       this.messageBuffer.add(remoteJid, text);
     }
   }
@@ -761,6 +786,8 @@ Your response:`;
     const MAX_TOOL_DEPTH = 5;
     let toolDepth = 0;
 
+    let lastToolWasSilent = false;
+
     while (geminiResponse.type === 'tool_call' && geminiResponse.functionCall && toolDepth < MAX_TOOL_DEPTH) {
       const { name, args } = geminiResponse.functionCall;
       console.log(`🛠️ Tool Execution: ${name}`);
@@ -772,6 +799,9 @@ Your response:`;
         console.error(`Tool error:`, toolError.message);
         toolResult = { error: "Tool failed: " + toolError.message };
       }
+
+      // Check if this tool asked us to stay silent (e.g. start_custom_post sends its own message)
+      lastToolWasSilent = !!(toolResult as any)?._silent;
 
       const resultData = (toolResult as any)?._data;
 
@@ -832,6 +862,12 @@ Your response:`;
     }
 
     if (geminiResponse.type === 'text' && geminiResponse.content) {
+      // If the last tool sent its own message and flagged _silent, don't also send Gemini's reply.
+      // This prevents double messages (e.g. start_custom_post sends session prompt directly).
+      if (lastToolWasSilent) {
+        console.log(`🤐 Suppressing Gemini text reply (last tool was silent/self-sending).`);
+        return;
+      }
       await this.sendResponseAndLog(remoteJid, geminiResponse.content, contact, history, fullText);
     } else if (geminiResponse.type === 'tool_call') {
       console.warn(`⚠️ Max tool depth (${MAX_TOOL_DEPTH}) exceeded. Forcing final response from AI...`);

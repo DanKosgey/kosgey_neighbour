@@ -47,6 +47,18 @@ class CustomCampaignService {
 
     /** Called when owner triggers the `start_custom_post` tool */
     public startSession(phone: string): string {
+        // Guard: if a session already exists (e.g. duplicate tool calls from multiple workers),
+        // don't reset it — just nudge the owner to continue.
+        if (this.sessions.has(phone)) {
+            const existing = this.sessions.get(phone)!;
+            if (Date.now() - existing.startedAt < this.SESSION_TTL_MS) {
+                return (
+                    '⚠️ A custom post session is already in progress.\n\n' +
+                    'Please continue from where we left off, or type *cancel* to start fresh.'
+                );
+            }
+        }
+
         this.sessions.set(phone, {
             step: 'awaiting_topic',
             topic: '',
@@ -225,15 +237,25 @@ class CustomCampaignService {
         normalized: string,
         client: any
     ): Promise<string> {
-        if (['yes', 'send', 'broadcast', 'post', 'go', 'do it', 'ok', 'okay', 'yep', 'yeah'].some(k =>
-            normalized.includes(k)
-        )) {
+        // Require the message to START WITH or EXACTLY MATCH a confirmation word.
+        // This prevents accidental triggers from messages like "I said no" or "I don't want to post that".
+        const CONFIRM_WORDS = ['yes', 'send', 'broadcast', 'go', 'do it', 'ok', 'okay', 'yep', 'yeah'];
+        const isConfirmed = CONFIRM_WORDS.some(k =>
+            normalized === k || normalized.startsWith(k + ' ') || normalized.startsWith(k + '!')
+        );
+
+        if (isConfirmed) {
             // Generate and broadcast
             this.sessions.delete(phone); // Clear session before async work
             return await this._generateAndBroadcast(session, client);
         }
 
-        if (['edit', 'change', 'redo', 'rewrite'].some(k => normalized.includes(k))) {
+        const EDIT_WORDS = ['edit', 'change', 'redo', 'rewrite'];
+        const isEdit = EDIT_WORDS.some(k =>
+            normalized === k || normalized.startsWith(k + ' ')
+        );
+
+        if (isEdit) {
             session.step = 'awaiting_topic';
             session.imageBuffer = null;
             session.draftText = '';
@@ -244,9 +266,21 @@ class CustomCampaignService {
             );
         }
 
-        // "No" or anything else → cancel
-        this.cancelSession(phone);
-        return '❌ Post cancelled. Come back anytime to create a new custom post!';
+        const CANCEL_WORDS = ['no', 'nope', 'cancel', 'stop', 'abort', 'quit', 'never mind'];
+        const isCancel = CANCEL_WORDS.some(k =>
+            normalized === k || normalized.startsWith(k + ' ')
+        );
+
+        if (isCancel) {
+            this.cancelSession(phone);
+            return '❌ Post cancelled. Come back anytime to create a new custom post!';
+        }
+
+        // Unrecognized reply — prompt again
+        return (
+            '❓ I didn\'t quite catch that.\n\n' +
+            'Reply *yes* to broadcast now, *edit* to change the topic, or *cancel* to abort.'
+        );
     }
 
     // ─── Broadcast Logic ──────────────────────
