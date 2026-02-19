@@ -553,6 +553,32 @@ Your response:`;
 
     const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
     const pushName = msg.pushName;
+    const isImage = !!msg.message?.imageMessage;
+
+    // Handle image messages from the owner if they're in a custom campaign session
+    if (isImage && ownerService.isOwner(remoteJid)) {
+      try {
+        const { customCampaignService } = await import('../services/marketing/customCampaignService');
+        if (customCampaignService.hasActiveSession(remoteJid)) {
+          const { downloadMediaMessage } = await import('@whiskeysockets/baileys');
+          const buffer = await downloadMediaMessage(msg, 'buffer', {});
+          if (buffer) {
+            const response = await customCampaignService.handleOwnerImage(remoteJid, buffer as Buffer, this);
+            if (response !== null) {
+              if (this.messageSender) {
+                await this.messageSender.sendText(remoteJid, response);
+              } else if (this.sock) {
+                await this.sock.sendMessage(remoteJid, { text: response });
+              }
+              return;
+            }
+          }
+        }
+      } catch (e: any) {
+        console.error('[CustomCampaign] Failed to handle owner image:', e.message);
+      }
+      return; // Don't process image messages further in normal flow
+    }
 
     if (!text) return;
     if (remoteJid === 'status@broadcast') return;
@@ -625,6 +651,23 @@ Your response:`;
       return await db.select().from(contacts).where(eq(contacts.phone, remoteJid)).then(res => res[0]);
     });
     if (!contact) return;
+
+    // Check for active custom post campaign session (owner-only)
+    if (isOwner) {
+      try {
+        const { customCampaignService } = await import('../services/marketing/customCampaignService');
+        if (customCampaignService.hasActiveSession(remoteJid)) {
+          const campaignResponse = await customCampaignService.handleMessage(remoteJid, fullText, this);
+          if (campaignResponse !== null) {
+            console.log(`📢 [CustomCampaign] Session intercepted message for ${remoteJid}`);
+            await this.sendResponseAndLog(remoteJid, campaignResponse, contact, [], fullText);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('[CustomCampaign] Session check failed:', e);
+      }
+    }
 
     try {
       const { marketingService } = await import('../services/marketing/marketingService');

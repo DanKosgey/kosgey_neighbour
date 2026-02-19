@@ -335,6 +335,15 @@ export const AI_TOOLS = [
                     },
                     required: ["message"]
                 }
+            },
+            {
+                name: "start_custom_post",
+                description: "Start a guided custom post/ad creation session with the OWNER. Walk them through: what the post is about, whether to include a photo, an AI-polished draft, and finally broadcast it to ALL WhatsApp groups. OWNER ONLY. Trigger this when the owner says things like 'I want to post something', 'create a custom ad', 'make a post', 'broadcast a message', 'send an announcement', etc.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {},
+                    required: []
+                }
             }
         ]
     }
@@ -801,6 +810,18 @@ export async function executeLocalTool(name: string, args: any, context: any) {
             } catch (e: any) {
                 console.error("Message admins tool failed:", e);
                 return { error: `Failed to message admins: ${e.message}` };
+            }
+
+
+        case 'start_custom_post':
+            try {
+                const { customCampaignService } = await import('../marketing/customCampaignService');
+                const phone = context?.contact?.phone;
+                if (!phone) return { error: "No contact phone found." };
+                const response = customCampaignService.startSession(phone);
+                return { result: response };
+            } catch (e: any) {
+                return { error: `Custom post failed to start: ${e.message}` };
             }
 
         default:
