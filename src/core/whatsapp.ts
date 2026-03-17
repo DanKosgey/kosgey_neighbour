@@ -238,9 +238,13 @@ export class WhatsAppClient {
           } catch (deleteError) {
             console.warn('⚠️ Failed to clear auth credentials:', deleteError);
           }
+          // Destroy current socket and re-initialize to generate new QR code
+          this.sock = undefined;
+          this.qrCode = null;
+          this.reconnectAttempts = 0;
           await sessionManager.releaseLock();
-          console.log('🔄 WhatsApp will remain disconnected. Scan QR code via web interface to connect.');
-          // Don't exit - let the server continue running
+          console.log('🔄 Re-initializing to generate new QR code...');
+          setTimeout(() => this.initialize(), 1000);
           return;
         }
 
