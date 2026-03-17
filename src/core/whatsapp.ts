@@ -170,9 +170,11 @@ export class WhatsAppClient {
     }
   }
 
-  async initialize() {
+  async initialize(isReinit: boolean = false) {
     this.isLoggingOut = false;
-    this.authResetAttempts = 0; // Reset counter on manual initialization
+    if (!isReinit) {
+      this.authResetAttempts = 0; // Only reset counter on fresh initialization
+    }
     console.log('🔌 Initializing Representative Agent...');
 
     console.log('🔒 Attempting to acquire session lock...');
@@ -258,7 +260,7 @@ export class WhatsAppClient {
           }
 
           console.log('🔄 Re-initializing to generate new QR code...');
-          setTimeout(() => this.initialize(), 2000); // Increased delay
+          setTimeout(() => this.initialize(true), 2000); // Increased delay, mark as re-init
           return;
         }
 
@@ -300,7 +302,7 @@ export class WhatsAppClient {
           this.reconnectAttempts++;
           const delay = Math.min(3000 * Math.pow(2, this.reconnectAttempts - 1), 30000);
           console.log(`⏳ Reconnecting in ${delay / 1000} seconds... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-          setTimeout(() => this.initialize(), delay);
+          setTimeout(() => this.initialize(true), delay);
         } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
           console.log('❌ Max reconnection attempts reached. WhatsApp will remain disconnected.');
           console.log('💡 Check your internet connection and try again later via web interface.');
