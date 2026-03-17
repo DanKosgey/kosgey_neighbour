@@ -654,19 +654,14 @@ Your response:`;
 
     console.log(`🤖 AI Processing Batch for ${remoteJid} (Owner: ${isOwner}): "${fullText}"`);
 
-    if (rateLimitManager.isLimited() && !isOwner) {
-      console.log(`⏸️ Rate limited. Queueing message from ${remoteJid} (silent mode)`);
-      rateLimitManager.enqueue(remoteJid, messages);
-      return;
-    }
-
-    // Check if chat agent is enabled (skip only for non-owners)
+    // ⏰ CHECK CHAT AGENT STATUS FIRST, BEFORE ANYTHING ELSE
     const { systemSettingsService } = await import('../services/systemSettings');
     const chatAgentEnabled = await systemSettingsService.isChatAgentEnabled();
+    
     if (!chatAgentEnabled && !isOwner) {
-      console.log(`🔇 Chat Agent is DISABLED. Skipping AI reply for ${remoteJid}. Message will be logged but no response sent.`);
+      console.log(`🔇 Chat Agent is DISABLED. Non-owner message ignored. Logging only.`);
       
-      // Still log the message for context
+      // Log the message for context, but don't process or queue it
       const contact = await withRetry(async () => {
         return await db.select().from(contacts).where(eq(contacts.phone, remoteJid)).then(res => res[0]);
       });
@@ -683,7 +678,14 @@ Your response:`;
         });
       }
       
-      return; // Exit without generating AI response
+      return; // ✅ Exit COMPLETELY - don't queue, don't process
+    }
+
+    // ⏰ NOW check rate limits (after chat agent check)
+    if (rateLimitManager.isLimited() && !isOwner) {
+      console.log(`⏸️ Rate limited. Queueing message from ${remoteJid} (silent mode)`);
+      rateLimitManager.enqueue(remoteJid, messages);
+      return;
     }
 
     const contact = await withRetry(async () => {
