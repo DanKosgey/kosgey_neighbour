@@ -226,23 +226,30 @@ export class WhatsAppClient {
 
         if (error === 405) {
           console.log('❌ Session data is corrupted or invalid (405 error).');
-          console.log('💡 Solution: Run "npx ts-node scripts/clear-auth.ts" to clear session and generate a new QR code.');
+          console.log('🧹 Auto-clearing corrupted auth data...');
+          try {
+            await db.delete(authCredentials);
+            console.log('✅ Auth credentials cleared automatically.');
+          } catch (deleteError) {
+            console.warn('⚠️ Failed to clear auth credentials:', deleteError);
+          }
           await sessionManager.releaseLock();
-          process.exit(1);
+          console.log('🔄 WhatsApp will remain disconnected. Scan QR code via web interface to connect.');
+          // Don't exit - let the server continue running
           return;
         }
 
         if ((error === 401 || error === DisconnectReason.loggedOut) && !this.isLoggingOut) {
           console.log('❌ Session logged out or invalid (401).');
-          console.log('💡 Clearing auth credentials to allow re-scan...');
+          console.log('🧹 Clearing auth credentials...');
           try {
             await db.delete(authCredentials);
           } catch (deleteError) {
             console.warn('⚠️ Failed to clear auth credentials (table might not exist):', deleteError);
           }
           await sessionManager.releaseLock();
-          console.log('✅ Credentials cleared. Exiting to restart...');
-          process.exit(1);
+          console.log('🔄 WhatsApp disconnected. Scan QR code via web interface to reconnect.');
+          // Don't exit - let the server continue running
           return;
         }
 
@@ -272,9 +279,10 @@ export class WhatsAppClient {
           console.log(`⏳ Reconnecting in ${delay / 1000} seconds... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
           setTimeout(() => this.initialize(), delay);
         } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-          console.log('❌ Max reconnection attempts reached. Please check your connection and try again.');
+          console.log('❌ Max reconnection attempts reached. WhatsApp will remain disconnected.');
+          console.log('💡 Check your internet connection and try again later via web interface.');
           await sessionManager.releaseLock();
-          process.exit(1);
+          // Don't exit - let the server continue running
         }
       } else if (connection === 'open') {
         console.log('✅ Representative Online!');
