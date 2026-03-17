@@ -52,17 +52,22 @@ export class WhatsAppClient {
       if (this.sock) {
         console.log('📤 Logging out from WhatsApp...');
         await this.sock.logout();
-        this.sock = undefined;
-        this.qrCode = null;
-        this.reconnectAttempts = 0;
         console.log('✅ Logged out successfully');
-        setTimeout(() => this.initialize(), 2000);
       } else {
         console.log('⚠️ No active connection to logout from');
       }
+      // Always clean up state
+      this.sock = undefined;
+      this.qrCode = null;
+      this.reconnectAttempts = 0;
+      // Don't re-initialize after manual logout
     } catch (error) {
       console.error('❌ Logout error:', error);
-      throw error;
+      // Clean up state even on error
+      this.sock = undefined;
+      this.qrCode = null;
+      this.reconnectAttempts = 0;
+      // Don't throw - logout should be forgiving
     }
   }
 
