@@ -296,25 +296,17 @@ export const AI_TOOLS = [
             },
             {
                 name: "post_now",
-                description: "Force the agent to generate and post a marketing message (Ad or Fact) immediately. Useful for testing or manual overrides.",
+                description: "Force the agent to generate and post an advertisement (Ad) to all groups immediately. Useful for testing or manual overrides.",
                 parameters: {
                     type: "OBJECT",
                     properties: {
-                        type: { type: "STRING", description: "Type of post: 'ad_morning', 'ad_afternoon', 'ad_evening', 'fact_morning', 'fact_afternoon', 'fact_evening'." },
+                        type: { type: "STRING", description: "Type of ad: 'ad_morning', 'ad_afternoon', 'ad_evening'." },
                         custom_instructions: { type: "STRING", description: "Optional instructions for what the ad should say. E.g. 'Announce the agent is back online', 'Promote our new 50% discount'. If provided, this overrides the default random style." }
                     },
                     required: ["type"]
                 }
             },
-            {
-                name: "send_random",
-                description: "Send a random fun content (quote, joke, prediction, fact, riddle, or wisdom) to all groups immediately. Great for engagement!",
-                parameters: {
-                    type: "OBJECT",
-                    properties: {},
-                    required: []
-                }
-            },
+
             {
                 name: "delete_last_message",
                 description: "Delete the last message sent by the agent in the current chat. Use this to correct mistakes or when the user asks to delete the last message.",
@@ -336,15 +328,7 @@ export const AI_TOOLS = [
                     required: ["message"]
                 }
             },
-            {
-                name: "start_custom_post",
-                description: "Start a guided custom post/ad creation session with the OWNER. Walk them through: what the post is about, whether to include a photo, an AI-polished draft, and finally broadcast it to ALL WhatsApp groups. OWNER ONLY. Trigger this when the owner says things like 'I want to post something', 'create a custom ad', 'make a post', 'broadcast a message', 'send an announcement', etc.",
-                parameters: {
-                    type: "OBJECT",
-                    properties: {},
-                    required: []
-                }
-            }
+
         ]
     }
 ];
@@ -668,16 +652,10 @@ export async function executeLocalTool(name: string, args: any, context: any) {
                 // Let's modify executeMarketingSlot logic to be reusable?
                 // Or just generate the content here and return it.
                 const { adContentService } = await import('../marketing/adContentService');
-                const { factService } = await import('../marketing/factService');
 
-                if (args.type.startsWith('ad') || args.type.startsWith('fact')) {
+                if (args.type.startsWith('ad')) {
                     const client = context?.client;
                     if (!client) {
-                        // Fallback: If no client in context (e.g. testing), just return the content
-                        if (args.type.startsWith('fact')) {
-                            const fact = await factService.getSmartFact('morning');
-                            return { result: `(Simulation) 🎲 *Random Fact*\n\n${fact}` };
-                        }
                         return { error: "WhatsApp Client not available in context. Cannot broadcast." };
                     }
 
@@ -694,66 +672,16 @@ export async function executeLocalTool(name: string, args: any, context: any) {
                         .catch(err => console.error(`❌ Background broadcast failed for ${args.type}:`, err));
 
                     return {
-                        result: `✅ Broadcast command sent successfully for '${args.type}'.\nThe content is being generated${args.custom_instructions ? ' with your custom instructions' : ''} and sent to all target groups in the background.`
+                        result: `✅ Broadcast command sent successfully for '${args.type}'.\nThe ad is being generated${args.custom_instructions ? ' with your custom instructions' : ''} and sent to all target groups in the background.`
                     };
                 } else {
-                    return { error: "Invalid post type. Must start with 'ad' or 'fact'." };
+                    return { error: "Invalid post type. Only ad types (ad_morning, ad_afternoon, ad_evening) can be posted to groups." };
                 }
             } catch (e: any) {
                 return { error: `Post now failed: ${e.message}` };
             }
 
-        case 'send_random':
-            try {
-                const client = context?.client;
-                if (!client) {
-                    return { error: "WhatsApp Client not available in context. Cannot broadcast." };
-                }
 
-                const { randomContentService } = await import('../marketing/randomContentService');
-
-                console.log('🎲 Tool send_random: Generating random content...');
-
-                // Generate and broadcast in background
-                (async () => {
-                    try {
-                        const randomContent = await randomContentService.generateRandomContent();
-                        const message = randomContentService.formatForWhatsApp(randomContent);
-
-                        const groups = await client.getAllGroups();
-
-                        if (groups.length === 0) {
-                            console.log('⚠️ No groups found for random content');
-                            return;
-                        }
-
-                        console.log(`📢 Broadcasting random ${randomContent.type} to ${groups.length} groups...`);
-
-                        for (const groupJid of groups) {
-                            try {
-                                await client.sendText(groupJid, message);
-                                console.log(`✅ Random content sent to ${groupJid}`);
-
-                                if (groups.indexOf(groupJid) < groups.length - 1) {
-                                    await new Promise(resolve => setTimeout(resolve, 5000));
-                                }
-                            } catch (error) {
-                                console.error(`❌ Failed to send to ${groupJid}:`, error);
-                            }
-                        }
-
-                        console.log('✅ Random content broadcast complete');
-                    } catch (error) {
-                        console.error('❌ Random content broadcast failed:', error);
-                    }
-                })();
-
-                return {
-                    result: `🎲 Random content is being generated and sent to all groups! It could be a quote, joke, prediction, fact, riddle, or wisdom. Stay tuned! ✨`
-                };
-            } catch (e: any) {
-                return { error: `Send random failed: ${e.message}` };
-            }
 
         case 'message_admins':
             try {
@@ -812,32 +740,6 @@ export async function executeLocalTool(name: string, args: any, context: any) {
                 return { error: `Failed to message admins: ${e.message}` };
             }
 
-
-        case 'start_custom_post':
-            try {
-                const { customCampaignService } = await import('../marketing/customCampaignService');
-                const phone = context?.contact?.phone;
-                if (!phone) return { error: "No contact phone found." };
-
-                const sessionPrompt = customCampaignService.startSession(phone);
-
-                // Send the session prompt DIRECTLY to the owner — don't return it to Gemini.
-                // This prevents Gemini from generating its own chatty pre-response in addition
-                // to the session prompt, which would cause the owner to receive two messages.
-                const client = context?.client;
-                if (client) {
-                    if (client.messageSender) {
-                        await client.messageSender.sendText(phone, sessionPrompt);
-                    } else if (client.sock) {
-                        await client.sock.sendMessage(phone, { text: sessionPrompt });
-                    }
-                }
-
-                // _silent: true tells processMessageBatch to suppress Gemini's text reply entirely.
-                return { result: '__CUSTOM_POST_STARTED__', _silent: true };
-            } catch (e: any) {
-                return { error: `Custom post failed to start: ${e.message}` };
-            }
 
         default:
             return { error: "Tool not found." };

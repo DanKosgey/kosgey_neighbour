@@ -39,12 +39,8 @@ async function runTest() {
         const campRes = await marketingService.createCampaign("Test Campaign");
         console.log(campRes);
 
-        // 3. Trigger Fact Slot
-        console.log("\n--- 3. Testing Fact Generation (Tier 3) ---");
-        await marketingService.executeMarketingSlot(mockClient, 'fact_evening');
-
-        // 4. Trigger Ad Slot (Text + Image)
-        console.log("\n--- 4. Testing Ad Generation (Morning Ad) ---");
+        // 3. Trigger Ad Slot (Text + Image)
+        console.log("\n--- 3. Testing Ad Generation (Morning Ad) ---");
         // This might fail if no Google Keys, but logic should hold
         await marketingService.executeMarketingSlot(mockClient, 'ad_morning');
 

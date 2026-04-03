@@ -120,6 +120,12 @@
                     </svg>
                     <span>Analytics</span>
                 </a>
+                <a href="#" class="nav-item" data-page="guide">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+                    </svg>
+                    <span>Guide</span>
+                </a>
                 <a href="#" class="nav-item" data-page="ai-profile">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M13 7H7v6h6V7z" />
@@ -414,9 +420,27 @@
                             <p>Open WhatsApp on your phone and scan this code</p>
                         </div>
                         <div class="qr-code-container" id="qr-code">
-                            <div class="qr-loader">
-                                <div class="spinner"></div>
-                                <p>Generating QR Code...</p>
+                            <!-- Generate Button State -->
+                            <div id="qr-generate-state" class="qr-generate-state">
+                                <svg width="64" height="64" viewBox="0 0 64 64" fill="none" style="margin-bottom: 16px; opacity: 0.3;">
+                                    <rect x="8" y="8" width="48" height="48" stroke="currentColor" stroke-width="2" fill="none"/>
+                                    <rect x="12" y="12" width="8" height="8" fill="currentColor"/>
+                                    <rect x="44" y="12" width="8" height="8" fill="currentColor"/>
+                                    <rect x="12" y="44" width="8" height="8" fill="currentColor"/>
+                                </svg>
+                                <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 16px;">Click below to generate a QR code</p>
+                                <button class="btn-generate-qr" onclick="generateQRCode()">Generate QR Code</button>
+                            </div>
+                            
+                            <!-- QR Code Display State -->
+                            <div id="qr-display-state" style="display: none;">
+                                <div id="qr-display-content" style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+                                    <!-- QR image will be inserted here -->
+                                </div>
+                                <div id="qr-timer-section" style="margin-top: 16px; text-align: center;">
+                                    <p id="qr-timer-text" style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px;">Code expires in <span id="qr-timer-countdown">60</span>s</p>
+                                    <button class="btn-regenerate-qr" onclick="generateQRCode()" style="display: none;">Regenerate QR Code</button>
+                                </div>
                             </div>
                         </div>
                         <div class="quick-actions-row">
@@ -1137,6 +1161,252 @@
                                 </svg>
                                 Disconnect
                             </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guide Page -->
+            <div class="page" id="guide-page">
+                <header class="page-header">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <button class="btn-refresh" onclick="switchPage('dashboard')" aria-label="Back to Home">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+                            </svg>
+                        </button>
+                        <h2>📖 User Guide</h2>
+                    </div>
+                </header>
+
+                <div class="guide-container">
+                    <!-- Guide Navigation -->
+                    <div class="guide-nav">
+                        <button class="guide-nav-item active" onclick="switchGuideSection('overview')">Overview</button>
+                        <button class="guide-nav-item" onclick="switchGuideSection('dashboard')">Dashboard</button>
+                        <button class="guide-nav-item" onclick="switchGuideSection('chats')">Chats</button>
+                        <button class="guide-nav-item" onclick="switchGuideSection('contacts')">Contacts</button>
+                        <button class="guide-nav-item" onclick="switchGuideSection('marketing')">Marketing</button>
+                        <button class="guide-nav-item" onclick="switchGuideSection('shops')">Shops</button>
+                        <button class="guide-nav-item" onclick="switchGuideSection('communities')">Communities</button>
+                        <button class="guide-nav-item" onclick="switchGuideSection('analytics')">Analytics</button>
+                        <button class="guide-nav-item" onclick="switchGuideSection('profiles')">Profiles</button>
+                        <button class="guide-nav-item" onclick="switchGuideSection('settings')">Settings</button>
+                    </div>
+
+                    <!-- Guide Content -->
+                    <div class="guide-content">
+                        <!-- Overview Section -->
+                        <div class="guide-section active" id="guide-overview">
+                            <h3>Welcome to Your AI Assistant Dashboard</h3>
+                            <p>This application is your WhatsApp business management hub powered by AI. Here's what you can do:</p>
+                            <ul>
+                                <li><strong>Manage Conversations:</strong> View and respond to chats from your WhatsApp groups</li>
+                                <li><strong>Build Audience:</strong> Track contacts and organize them into segments</li>
+                                <li><strong>Run Campaigns:</strong> Create and schedule marketing campaigns automatically</li>
+                                <li><strong>Manage Shops:</strong> Add and manage your product listings</li>
+                                <li><strong>Track Analytics:</strong> Monitor performance metrics and engagement</li>
+                                <li><strong>Brand Management:</strong> Configure your AI profile and business information</li>
+                            </ul>
+                            <p style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border-left: 4px solid var(--primary);">
+                                <strong>💡 Pro Tip:</strong> Start by connecting your WhatsApp account through Settings, then set up your business profile and brand voice.
+                            </p>
+                        </div>
+
+                        <!-- Dashboard Section -->
+                        <div class="guide-section" id="guide-dashboard">
+                            <h3>Dashboard</h3>
+                            <p>Your home screen showing key metrics and quick access to features.</p>
+                            <h4>Features:</h4>
+                            <ul>
+                                <li><strong>Connection Status:</strong> Shows if WhatsApp is online or requires QR code scan</li>
+                                <li><strong>Total Messages:</strong> Count of all messages received across groups</li>
+                                <li><strong>Active Contacts:</strong> Number of unique people messaging you</li>
+                                <li><strong>Response Rate:</strong> Percentage of messages you've replied to</li>
+                                <li><strong>Recent Activity:</strong> Latest incoming and outgoing messages</li>
+                                <li><strong>Quick Actions:</strong> Create campaign, manage groups, configure brand profile</li>
+                            </ul>
+                            <h4>How to Use:</h4>
+                            <ol>
+                                <li>Check connection status to ensure WhatsApp is connected</li>
+                                <li>Review recent activity to stay updated</li>
+                                <li>Use quick action buttons to launch campaigns or manage settings</li>
+                            </ol>
+                        </div>
+
+                        <!-- Chats Section -->
+                        <div class="guide-section" id="guide-chats">
+                            <h3>Chats</h3>
+                            <p>View and manage your WhatsApp conversations in real-time.</p>
+                            <h4>Features:</h4>
+                            <ul>
+                                <li><strong>Conversation List:</strong> All active chats sorted by recent activity</li>
+                                <li><strong>Contact Info:</strong> Name and last message preview for each conversation</li>
+                                <li><strong>Full Chat History:</strong> Complete message thread with timestamps</li>
+                                <li><strong>Quick Response:</strong> Send replies directly from the chat interface</li>
+                            </ul>
+                            <h4>How to Use:</h4>
+                            <ol>
+                                <li>Click on a contact in the chat list to open the conversation</li>
+                                <li>Review the message history to understand context</li>
+                                <li>Type your response and send</li>
+                                <li>Use the back button to return to the chat list</li>
+                            </ol>
+                        </div>
+
+                        <!-- Contacts Section -->
+                        <div class="guide-section" id="guide-contacts">
+                            <h3>Contacts</h3>
+                            <p>Build and manage your customer database.</p>
+                            <h4>Features:</h4>
+                            <ul>
+                                <li><strong>Contact Cards:</strong> Visual display of all your contacts</li>
+                                <li><strong>Contact Details:</strong> Name, phone number, and trust level</li>
+                                <li><strong>Trust Level:</strong> System automatically rates customer reliability (Low/Medium/High)</li>
+                                <li><strong>Interaction History:</strong> View past conversations with each contact</li>
+                            </ul>
+                            <h4>How to Use:</h4>
+                            <ol>
+                                <li>Your contacts are automatically added when they message you</li>
+                                <li>Click on a contact card to see their full profile</li>
+                                <li>The trust level helps you identify your most engaged customers</li>
+                                <li>Use this data to segment your marketing audiences</li>
+                            </ol>
+                        </div>
+
+                        <!-- Marketing Section -->
+                        <div class="guide-section" id="guide-marketing">
+                            <h3>Marketing</h3>
+                            <p>Create and manage automated marketing campaigns.</p>
+                            <h4>Features:</h4>
+                            <ul>
+                                <li><strong>Campaign Wizard:</strong> Step-by-step campaign creation</li>
+                                <li><strong>Auto-Generated Ads:</strong> AI creates marketing content automatically</li>
+                                <li><strong>Schedule Posts:</strong> Set automatic posting times (morning, afternoon, evening)</li>
+                                <li><strong>Target Groups:</strong> Send to all groups or specific selected ones</li>
+                                <li><strong>Brand Voice:</strong> Choose tone (Professional, Friendly, Urgent, Luxury, Playful)</li>
+                                <li><strong>Campaign Status:</strong> Track active and completed campaigns</li>
+                            </ul>
+                            <h4>How to Create a Campaign:</h4>
+                            <ol>
+                                <li>Click "Create Campaign" button</li>
+                                <li><strong>Step 1 - Details:</strong> Enter business info, USP, and select brand voice</li>
+                                <li><strong>Step 2 - Timing:</strong> Choose which times to post ads daily</li>
+                                <li><strong>Step 3 - Audience:</strong> Select target groups (or select all)</li>
+                                <li><strong>Step 4 - Review:</strong> Check summary and confirm</li>
+                                <li>Campaign automatically generates and posts ads at scheduled times</li>
+                            </ol>
+                        </div>
+
+                        <!-- Shops Section -->
+                        <div class="guide-section" id="guide-shops">
+                            <h3>Shops</h3>
+                            <p>Manage your product listings and inventory.</p>
+                            <h4>Features:</h4>
+                            <ul>
+                                <li><strong>Product Catalog:</strong> Add and organize your products</li>
+                                <li><strong>Product Details:</strong> Name, description, price, and images</li>
+                                <li><strong>Categories:</strong> Organize products by type</li>
+                                <li><strong>Inventory Tracking:</strong> Monitor stock levels</li>
+                                <li><strong>Product Sharing:</strong> Share products in customer chats</li>
+                            </ul>
+                            <h4>How to Use:</h4>
+                            <ol>
+                                <li>Click "Add Product" to create a new listing</li>
+                                <li>Fill in product details (name, description, price)</li>
+                                <li>Upload product images</li>
+                                <li>Set category and inventory count</li>
+                                <li>When chatting with customers, reference these products</li>
+                            </ol>
+                        </div>
+
+                        <!-- Communities Section -->
+                        <div class="guide-section" id="guide-communities">
+                            <h3>Communities</h3>
+                            <p>View and manage your WhatsApp groups and communities.</p>
+                            <h4>Features:</h4>
+                            <ul>
+                                <li><strong>Group List:</strong> All WhatsApp groups you're a member of</li>
+                                <li><strong>Group Details:</strong> Name, member count, and activity status</li>
+                                <li><strong>Member Info:</strong> See who's in each group</li>
+                                <li><strong>Group Statistics:</strong> Total reach and engagement metrics</li>
+                            </ul>
+                            <h4>How to Use:</h4>
+                            <ol>
+                                <li>Browse your groups to understand your audience reach</li>
+                                <li>Click on a group to see member details</li>
+                                <li>Use this information when creating targeted campaigns</li>
+                                <li>Target specific groups in your marketing campaigns</li>
+                            </ol>
+                        </div>
+
+                        <!-- Analytics Section -->
+                        <div class="guide-section" id="guide-analytics">
+                            <h3>Analytics</h3>
+                            <p>Track performance and engagement metrics.</p>
+                            <h4>Features:</h4>
+                            <ul>
+                                <li><strong>Message Statistics:</strong> Total messages sent and received</li>
+                                <li><strong>Engagement Charts:</strong> Visual representation of activity trends</li>
+                                <li><strong>Campaign Performance:</strong> Track how your marketing performs</li>
+                                <li><strong>Time-based Analytics:</strong> See when you're most active</li>
+                                <li><strong>Group Performance:</strong> Which groups are most engaged</li>
+                                <li><strong>Response Metrics:</strong> Average response time and reply rates</li>
+                            </ul>
+                            <h4>How to Use:</h4>
+                            <ol>
+                                <li>Review charts and metrics to understand performance</li>
+                                <li>Identify your best-performing content types</li>
+                                <li>Use insights to optimize future campaigns</li>
+                                <li>Export reports for business analysis</li>
+                            </ol>
+                        </div>
+
+                        <!-- Profiles Section -->
+                        <div class="guide-section" id="guide-profiles">
+                            <h3>Your Profiles</h3>
+                            <p>Configure your personal and AI agent profiles.</p>
+                            <h4>My Profile:</h4>
+                            <ul>
+                                <li><strong>Personal Information:</strong> Your name, role, and contact details</li>
+                                <li><strong>Business Description:</strong> What your business does</li>
+                                <li><strong>Profile Settings:</strong> Privacy and visibility preferences</li>
+                            </ul>
+                            <h4>AI Profile:</h4>
+                            <ul>
+                                <li><strong>Agent Personality:</strong> Define how the AI interacts with customers</li>
+                                <li><strong>Brand Voice:</strong> Tone and style of responses</li>
+                                <li><strong>Knowledge Base:</strong> Information the AI should know about your business</li>
+                                <li><strong>Auto-response Settings:</strong> Configure automatic replies</li>
+                            </ul>
+                            <h4>How to Use:</h4>
+                            <ol>
+                                <li>Go to "My Profile" to update your personal information</li>
+                                <li>Go to "AI Profile" to configure the agent's behavior</li>
+                                <li>Teach the AI about your products and services</li>
+                                <li>Set your preferred response style</li>
+                            </ol>
+                        </div>
+
+                        <!-- Settings Section -->
+                        <div class="guide-section" id="guide-settings">
+                            <h3>Settings</h3>
+                            <p>Configure application preferences and integrations.</p>
+                            <h4>Key Settings:</h4>
+                            <ul>
+                                <li><strong>WhatsApp Connection:</strong> Connect/disconnect your WhatsApp account</li>
+                                <li><strong>Appearance:</strong> Switch between light and dark themes</li>
+                                <li><strong>Database:</strong> Manage data and connections</li>
+                                <li><strong>API Keys:</strong> Configure external service integrations</li>
+                                <li><strong>Privacy:</strong> Manage data sharing and permissions</li>
+                            </ul>
+                            <h4>How to Use:</h4>
+                            <ol>
+                                <li>Check Connection Status to ensure WhatsApp is connected</li>
+                                <li>Add API keys for services like Google or Telegram if needed</li>
+                                <li>Adjust theme based on your preference</li>
+                                <li>Review privacy settings to control data usage</li>
+                            </ol>
                         </div>
                     </div>
                 </div>

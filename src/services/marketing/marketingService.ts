@@ -295,10 +295,11 @@ export class MarketingService {
     }
 
     /**
-     * Execute a specific marketing slot (Ad or Fact) - LEGACY / MASS TRIGGER
+     * Execute a specific marketing slot (Ad only) - LEGACY / MASS TRIGGER
      * Kept for backward compatibility or manual triggers
+     * Only accepts ad types - facts and non-ad content are no longer sent to groups
      */
-    public async executeMarketingSlot(client: any, slotType: 'ad_morning' | 'ad_afternoon' | 'ad_evening' | 'fact_morning' | 'fact_afternoon' | 'fact_evening', customInstructions?: string) {
+    public async executeMarketingSlot(client: any, slotType: 'ad_morning' | 'ad_afternoon' | 'ad_evening', customInstructions?: string) {
         console.log(`🚀 Executing Marketing Slot (Mass): ${slotType}`);
 
         // 1. Check for Active Campaigns (Fetch ALL active)

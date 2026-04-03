@@ -1,4 +1,4 @@
-import makeWASocket, { DisconnectReason, useMultiFileAuthState, WASocket } from '@whiskeysockets/baileys';
+import makeWASocket, { DisconnectReason, useMultiFileAuthState, WASocket, fetchLatestBaileysVersion, Browsers } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import { config } from '../config/env';
 import { db, withRetry } from '../database';
@@ -186,10 +186,14 @@ export class WhatsAppClient {
     console.log('   - Has existing credentials:', !!state.creds.me);
     console.log('   - Registration ID:', state.creds.registrationId);
 
+    const { version, isLatest } = await fetchLatestBaileysVersion();
+    console.log(`🔍 WhatsApp Version: ${version.join('.')}${isLatest ? ' (Latest)' : ' (Outdated)'}`);
+
     this.sock = makeWASocket({
+      version,
       logger: pino({ level: 'silent' }) as any,
       auth: state,
-      browser: ['Representative', 'Chrome', '1.0.0'],
+      browser: Browsers.windows('Desktop'),
       syncFullHistory: false,
       retryRequestDelayMs: 500,
       maxMsgRetryCount: 3,

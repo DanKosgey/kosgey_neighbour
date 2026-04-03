@@ -8,6 +8,11 @@ let connectionStatus = 'DISCONNECTED';
 let contacts = [];
 let chats = [];
 
+// QR Code Timer State
+let qrTimerInterval = null;
+let qrTimerRemaining = 60; // 60 seconds
+let currentQRData = null;
+
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
     initializeNavigation();
@@ -125,7 +130,7 @@ function scrollActiveNavItemIntoView() {
 function triggerNavPeekAnimation(navElement) {
     // Only do this if there are hidden items (nav is scrollable)
     const isScrollable = navElement.scrollWidth > navElement.clientWidth;
-
+    
     if (!isScrollable) return;
 
     // Get current scroll position
@@ -256,6 +261,9 @@ function loadPageData(page) {
         case 'analytics':
             loadAnalytics();
             break;
+        case 'guide':
+            loadGuide();
+            break;
     }
 }
 
@@ -309,7 +317,9 @@ function updateConnectionStatus(status, qr = null) {
         case 'WAITING_FOR_QR':
             label.textContent = 'Waiting for QR';
             detail.textContent = 'Scan to connect';
-            showQRCode(qr);
+            // Store the QR code data but don't show it immediately
+            currentQRData = qr;
+            showQRSection();
             showOnboardingOverlay();
             break;
         default:
@@ -322,25 +332,109 @@ function updateConnectionStatus(status, qr = null) {
 }
 
 // QR Code Display
-function showQRCode(qrData) {
+function showQRSection() {
     const qrSection = document.getElementById('qr-section');
-    const qrContainer = document.getElementById('qr-code');
     const statsGrid = document.getElementById('stats-grid');
 
     qrSection.style.display = 'block';
     statsGrid.style.display = 'none';
+    
+    // Show the generate button state initially
+    resetQRCodeDisplay();
+}
 
-    if (qrData) {
-        // Use QRCode library or display as ASCII
-        qrContainer.innerHTML = `
+function resetQRCodeDisplay() {
+    const generateState = document.getElementById('qr-generate-state');
+    const displayState = document.getElementById('qr-display-state');
+    
+    generateState.style.display = 'block';
+    displayState.style.display = 'none';
+    
+    // Clear any existing timers
+    if (qrTimerInterval) {
+        clearInterval(qrTimerInterval);
+        qrTimerInterval = null;
+    }
+    qrTimerRemaining = 60;
+}
+
+function generateQRCode() {
+    if (!currentQRData) {
+        console.error('No QR data available');
+        return;
+    }
+    
+    const generateState = document.getElementById('qr-generate-state');
+    const displayState = document.getElementById('qr-display-state');
+    const displayContent = document.getElementById('qr-display-content');
+    const timerSection = document.getElementById('qr-timer-section');
+    const regenerateBtn = timerSection.querySelector('.btn-regenerate-qr');
+    
+    // Clear any existing timers
+    if (qrTimerInterval) {
+        clearInterval(qrTimerInterval);
+    }
+    
+    // Reset timer
+    qrTimerRemaining = 60;
+    regenerateBtn.style.display = 'none';
+    
+    // Display the QR code
+    generateState.style.display = 'none';
+    displayState.style.display = 'block';
+    
+    if (currentQRData) {
+        displayContent.innerHTML = `
             <div style="width: 300px; height: 300px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 16px;">
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(qrData)}" 
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(currentQRData)}" 
                      alt="QR Code" 
                      style="width: 280px; height: 280px;" />
             </div>
         `;
     }
+    
+    // Start the timer countdown
+    startQRTimer();
 }
+
+function startQRTimer() {
+    const timerText = document.getElementById('qr-timer-text');
+    const timerCountdown = document.getElementById('qr-timer-countdown');
+    
+    // Update display immediately
+    timerCountdown.textContent = qrTimerRemaining;
+    
+    qrTimerInterval = setInterval(() => {
+        qrTimerRemaining--;
+        timerCountdown.textContent = qrTimerRemaining;
+        
+        // When timer reaches 0, show regenerate button
+        if (qrTimerRemaining <= 0) {
+            clearInterval(qrTimerInterval);
+            qrTimerInterval = null;
+            
+            // Hide the QR code and show regenerate button
+            const displayContent = document.getElementById('qr-display-content');
+            const regenerateBtn = document.querySelector('.btn-regenerate-qr');
+            
+            displayContent.innerHTML = `
+                <div style="text-align: center; color: var(--text-secondary);">
+                    <p>QR code has expired</p>
+                </div>
+            `;
+            
+            regenerateBtn.style.display = 'block';
+            timerText.innerHTML = '<span style="color: var(--danger);">Code expired</span> - Click regenerate to get a new one';
+        }
+    }, 1000);
+}
+
+// Old showQRCode function - kept for backwards compatibility but modified not to show immediately
+function showQRCode(qrData) {
+    // This is called when status changes to WAITING_FOR_QR
+    // Store the data but don't display until user clicks Generate
+    currentQRData = qrData;
+    showQRSection();
 
 function hideQRSection() {
     const qrSection = document.getElementById('qr-section');
@@ -348,6 +442,13 @@ function hideQRSection() {
 
     qrSection.style.display = 'none';
     statsGrid.style.display = 'grid';
+    
+    // Clear any existing timers
+    if (qrTimerInterval) {
+        clearInterval(qrTimerInterval);
+        qrTimerInterval = null;
+    }
+}
 }
 
 // Onboarding overlay helpers
@@ -1031,7 +1132,7 @@ function initializeSettings() {
         calendarAccessToggle.addEventListener('change', async (event) => {
             // Prevent event bubbling to parent elements
             event.stopPropagation();
-
+            
             const isEnabled = calendarAccessToggle.checked;
             const statusEl = document.getElementById('access-status-text');
 
@@ -1828,12 +1929,6 @@ async function refreshCampaigns() {
                         </div>
                     </div>
                     <div class="marketing-campaign-actions">
-                        <button onclick="triggerMiniCampaign(${c.id})" class="marketing-action-icon-btn" title="Run Now" style="color: var(--success);">
-                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                        </button>
                         <button onclick="editMiniCampaign(${c.id})" class="marketing-action-icon-btn" title="Edit">
                             <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -2169,36 +2264,6 @@ window.deleteMiniCampaign = async function (id) {
     }
 };
 
-// Trigger Campaign Manually
-window.triggerMiniCampaign = async function (id) {
-    if (!confirm("Run this campaign immediately? This will post to all target groups now.")) return;
-
-    // Find campaign to get name for toast
-    const campaign = window.allCampaigns.find(c => c.id === id);
-    const name = campaign ? campaign.name : "Campaign";
-
-    showToast(`Triggering ${name}...`, "info");
-
-    try {
-        const response = await fetch(`${API_BASE}/api/marketing/trigger-now`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ campaignId: id, slotType: 'ad_manual_button' })
-        });
-
-        const result = await response.json();
-
-        if (response.ok) {
-            showToast("Campaign triggered successfully!", "success");
-        } else {
-            showToast(`Failed: ${result.error || 'Unknown error'}`, "error");
-        }
-    } catch (e) {
-        console.error(e);
-        showToast("Trigger failed. Check connection.", "error");
-    }
-};
-
 // Make globally available
 window.refreshCampaigns = refreshCampaigns;
 window.loadMarketing = loadMarketing;
@@ -2228,6 +2293,56 @@ window.toggleTimeSlot = function (slot) {
     if (typeof updateReviewSummary === 'function') {
         updateReviewSummary();
     }
+};
+
+// ==========================================
+// GUIDE PAGE LOGIC
+// ==========================================
+
+function loadGuide() {
+    // Show the first guide section (overview) by default
+    switchGuideSection('overview');
+}
+
+window.switchGuideSection = function (sectionId) {
+    // Hide all sections
+    document.querySelectorAll('.guide-section').forEach(section => {
+        section.classList.remove('active');
+    });
+
+    // Remove active class from all nav items
+    document.querySelectorAll('.guide-nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+
+    // Show the selected section
+    const selectedSection = document.getElementById(`guide-${sectionId}`);
+    if (selectedSection) {
+        selectedSection.classList.add('active');
+    }
+
+    // Highlight the active nav item
+    const navItems = document.querySelectorAll('.guide-nav-item');
+    navItems.forEach(item => {
+        if (item.textContent.toLowerCase().includes(sectionId) || sectionId === 'overview') {
+            const isMappedToSection = {
+                'overview': 'Overview',
+                'dashboard': 'Dashboard',
+                'chats': 'Chats',
+                'contacts': 'Contacts',
+                'marketing': 'Marketing',
+                'shops': 'Shops',
+                'communities': 'Communities',
+                'analytics': 'Analytics',
+                'profiles': 'Profiles',
+                'settings': 'Settings'
+            };
+            
+            if (item.textContent === isMappedToSection[sectionId]) {
+                item.classList.add('active');
+            }
+        }
+    });
 };
 
 // ==========================================
@@ -3171,7 +3286,7 @@ async function loadAnalytics(timeframe = 'weekly') {
 function switchTimeframe(timeframe) {
     console.log('📊 Switching to timeframe:', timeframe);
     currentTimeframe = timeframe;
-
+    
     // Update button states
     document.querySelectorAll('.btn-timeframe').forEach(btn => {
         btn.classList.remove('active');
@@ -3179,7 +3294,7 @@ function switchTimeframe(timeframe) {
             btn.classList.add('active');
         }
     });
-
+    
     // Load analytics for the selected timeframe
     loadAnalytics(timeframe);
 }
@@ -3189,9 +3304,9 @@ function setEl(id, val) {
     if (el) {
         // Format large numbers
         if (typeof val === 'number' && val >= 1000) {
-            el.textContent = val >= 1000000
+            el.textContent = val >= 1000000 
                 ? (val / 1000000).toFixed(1) + 'M'
-                : val >= 1000
+                : val >= 1000 
                     ? (val / 1000).toFixed(1) + 'K'
                     : String(val);
         } else {
@@ -3222,17 +3337,17 @@ function toggleTableAndEmpty(tableWrapperId, emptyStateId, hasData) {
 
 function renderInsights(data) {
     const { messageVolumeByDay = [], peakActivityByHour = [], overview = {}, inboundOutbound = {} } = data;
-
+    
     // Volume Insights
     const peakHour = peakActivityByHour.reduce((best, h) => (h.count > (best?.count || 0) ? h : best), null);
     const totalVol = messageVolumeByDay.reduce((s, d) => s + (d.count || 0), 0);
     const avgPerDay = messageVolumeByDay.length ? Math.round(totalVol / messageVolumeByDay.length) : 0;
-    const recentTrend = messageVolumeByDay.length >= 2
+    const recentTrend = messageVolumeByDay.length >= 2 
         ? messageVolumeByDay.slice(-2).reduce((sum, d) => sum + (d.count || 0), 0) / 2
         : 0;
     const trendDirection = recentTrend > avgPerDay ? 'increasing' : recentTrend < avgPerDay ? 'decreasing' : 'stable';
     const growthRate = avgPerDay > 0 ? (((recentTrend - avgPerDay) / avgPerDay) * 100).toFixed(1) : 0;
-
+    
     const volumeInsight = totalVol > 0
         ? `📊 Volume Analysis: ${overview.totalMessages || 0} total messages (${avgPerDay}/day avg). Trend is ${trendDirection}${Math.abs(growthRate) > 5 ? ` (${growthRate > 0 ? '+' : ''}${growthRate}%)` : ''}. ${overview.newContactsLast7d > 0 ? `${overview.newContactsLast7d} new contacts acquired.` : ''}`
         : '📊 Start chatting to see message volume trends and growth patterns.';
@@ -3253,10 +3368,10 @@ function renderInsights(data) {
     const readRate = delivered > 0 ? ((read / delivered) * 100).toFixed(1) : 0;
     const replyRate = delivered > 0 ? ((replies / delivered) * 100).toFixed(1) : 0;
     const conversionRate = read > 0 ? ((replies / read) * 100).toFixed(1) : 0;
-
+    
     const inboundRatio = (inboundOutbound.inbound || 0) / Math.max((inboundOutbound.inbound || 0) + (inboundOutbound.outbound || 0), 1);
     const balanceInsight = inboundRatio > 0.6 ? 'Users are highly engaged' : inboundRatio < 0.4 ? 'Agent is proactive' : 'Balanced conversation flow';
-
+    
     const engagementInsight = delivered > 0
         ? `🎯 Engagement Metrics: Read rate ${readRate}% (${read}/${delivered}), Reply rate ${replyRate}% (${replies}/${delivered}), Conversion ${conversionRate}%. ${overview.avgResponseTimeSec > 0 ? `Response time: ${formatResponseTime(overview.avgResponseTimeSec)}. ` : ''}${balanceInsight}.`
         : '🎯 Run marketing campaigns to track engagement funnel: Delivered → Read → Replied. Monitor conversion rates for optimization.';
@@ -3269,10 +3384,10 @@ function renderInsights(data) {
 function renderTopContactsTable(contacts) {
     const tbody = document.getElementById('top-contacts-body');
     if (!tbody) return;
-
+    
     const contactList = (contacts || []).slice(0, 10); // Limit to top 10
     const totalMessages = contactList.reduce((sum, c) => sum + (c.messageCount || 0), 0);
-
+    
     tbody.innerHTML = contactList.map((c, idx) => {
         const percentage = totalMessages > 0 ? ((c.messageCount / totalMessages) * 100).toFixed(1) : 0;
         return `
@@ -3303,14 +3418,14 @@ function renderVolumeChart(volumeByDay) {
     const ctx = document.getElementById('volumeChart')?.getContext('2d');
     if (!ctx) return;
     if (volumeChart) volumeChart.destroy();
-
+    
     const labels = volumeByDay.map(d => {
         const dte = d.date ? new Date(d.date + 'T00:00:00') : null;
         return dte ? dte.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : d.date || '';
     });
     const counts = volumeByDay.map(d => d.count || 0);
     const maxCount = Math.max(...counts, 1);
-
+    
     volumeChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -3342,7 +3457,7 @@ function renderVolumeChart(volumeByDay) {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        afterLabel: function (context) {
+                        afterLabel: function(context) {
                             if (context.dataIndex > 0 && counts[context.dataIndex - 1] > 0) {
                                 const change = counts[context.dataIndex] - counts[context.dataIndex - 1];
                                 const changePercent = ((change / counts[context.dataIndex - 1]) * 100).toFixed(1);
@@ -3360,7 +3475,7 @@ function renderVolumeChart(volumeByDay) {
                     ticks: {
                         color: '#9ca3af',
                         stepSize: maxCount > 20 ? Math.ceil(maxCount / 5) : 1,
-                        callback: function (value) {
+                        callback: function(value) {
                             return value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value;
                         }
                     }
@@ -3383,7 +3498,7 @@ function renderPeakHoursChart(peakByHour) {
     const ctx = document.getElementById('peakHoursChart')?.getContext('2d');
     if (!ctx) return;
     if (peakHoursChart) peakHoursChart.destroy();
-
+    
     const hourData = peakByHour.length ? peakByHour : Array.from({ length: 24 }, (_, i) => ({ hour: i, count: 0 }));
     const labels = hourData.map(h => {
         const hour = h.hour;
@@ -3393,7 +3508,7 @@ function renderPeakHoursChart(peakByHour) {
     });
     const counts = hourData.map(h => h.count || 0);
     const maxCount = Math.max(...counts, 1);
-
+    
     peakHoursChart = new Chart(ctx, {
         type: 'bar',
         data: {
@@ -3425,11 +3540,11 @@ function renderPeakHoursChart(peakByHour) {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        title: function (context) {
+                        title: function(context) {
                             const hour = context[0].label;
                             return `${hour < 10 ? '0' : ''}${hour}:00 UTC`;
                         },
-                        label: function (context) {
+                        label: function(context) {
                             return `${context.parsed.y} messages`;
                         }
                     }
@@ -3448,7 +3563,7 @@ function renderPeakHoursChart(peakByHour) {
                     grid: { display: false },
                     ticks: {
                         color: '#9ca3af',
-                        callback: function (value, index) {
+                        callback: function(value, index) {
                             const hour = parseInt(value);
                             if (hour === 0 || hour % 3 === 0 || hour === 23) {
                                 return (hour < 10 ? '0' : '') + hour + ':00';
@@ -3719,7 +3834,7 @@ function renderEngagementChart(overview) {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        afterLabel: function (context) {
+                        afterLabel: function(context) {
                             const value = context.parsed.y;
                             const total = delivered;
                             if (context.dataIndex === 0) return '';
@@ -3742,7 +3857,7 @@ function renderEngagementChart(overview) {
                     grid: { color: 'rgba(255,255,255,0.05)' },
                     ticks: {
                         color: '#9ca3af',
-                        callback: function (value) {
+                        callback: function(value) {
                             return value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value;
                         }
                     }
@@ -3764,7 +3879,7 @@ function renderCampaignChart(campaigns) {
 
     const list = Array.isArray(campaigns) ? campaigns : [];
     const emptyState = document.getElementById('campaigns-empty');
-
+    
     if (emptyState) {
         emptyState.style.display = list.length === 0 ? 'block' : 'none';
     }
@@ -3821,7 +3936,7 @@ function renderCampaignChart(campaigns) {
                 },
                 tooltip: {
                     callbacks: {
-                        footer: function (tooltipItems) {
+                        footer: function(tooltipItems) {
                             const reads = tooltipItems[0].parsed.y;
                             const replies = tooltipItems[1]?.parsed.y || 0;
                             if (reads > 0) {
@@ -3839,7 +3954,7 @@ function renderCampaignChart(campaigns) {
                     grid: { color: 'rgba(255,255,255,0.05)' },
                     ticks: {
                         color: '#9ca3af',
-                        callback: function (value) {
+                        callback: function(value) {
                             return value >= 1000 ? (value / 1000).toFixed(1) + 'K' : value;
                         }
                     }
