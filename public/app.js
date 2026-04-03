@@ -351,6 +351,23 @@ function generateQRCode() {
         return;
     }
     
+    // First, request QR code generation from backend (60 second window)
+    fetch('/api/request-qr', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('✅ Backend notified to accept QR codes for next 60 seconds');
+                displayQRCode();
+            } else {
+                console.error('❌ Failed to request QR code:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Error requesting QR code:', error);
+        });
+}
+
+function displayQRCode() {
     const generateState = document.getElementById('qr-generate-state');
     const displayState = document.getElementById('qr-display-state');
     const displayContent = document.getElementById('qr-display-content');

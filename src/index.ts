@@ -66,6 +66,23 @@ app.get('/api/status', (req, res) => {
     });
 });
 
+app.post('/api/request-qr', (req, res) => {
+    try {
+        whatsappClient.requestQRCode();
+        res.json({
+            success: true,
+            message: 'QR code generation requested. Accepting QR codes for next 60 seconds...',
+            window: '60 seconds'
+        });
+    } catch (error) {
+        console.error('Failed to request QR code:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to request QR code'
+        });
+    }
+});
+
 app.get('/api/contacts', async (req, res) => {
     try {
         const allContacts = await db.select().from(contacts).orderBy(desc(contacts.lastSeenAt));
@@ -222,6 +239,8 @@ app.post('/api/disconnect', async (req, res) => {
             whatsappClient.initialize(true).catch(err => {
                 console.error('❌ Failed to re-initialize after disconnect:', err);
             });
+            // Request QR code generation window so the backend accepts incoming QR codes
+            whatsappClient.requestQRCode();
         }, 500);
 
         // 5. Send success response (NO process.exit!)

@@ -38,6 +38,9 @@ export class WhatsAppClient {
   private isLoggingOut: boolean = false;
   private authResetAttempts: number = 0;
   private maxAuthResetAttempts: number = 3;
+  private qrRequestedAt: number | null = null;
+  private qrExpirationTimer: NodeJS.Timeout | null = null;
+  private qrRequestWindowMs: number = 60000; // 60 seconds
 
   constructor() { }
 
@@ -46,6 +49,49 @@ export class WhatsAppClient {
       status: this.sock?.user ? 'CONNECTED' : (this.qrCode ? 'WAITING_FOR_QR' : 'DISCONNECTED'),
       qr: this.qrCode
     };
+  }
+
+  /**
+   * Request QR code generation for the next 60 seconds.
+   * Only QR codes generated within this window will be displayed.
+   */
+  public requestQRCode(): void {
+    console.log('📲 QR code requested by user. Will accept QR codes for next 60 seconds...');
+    this.qrRequestedAt = Date.now();
+    
+    // Clear any existing expiration timer
+    if (this.qrExpirationTimer) {
+      clearTimeout(this.qrExpirationTimer);
+    }
+    
+    // Set timer to clear QR request after 60 seconds
+    this.qrExpirationTimer = setTimeout(() => {
+      console.log('⏰ QR request window expired (60 seconds). Stopping QR generation...');
+      this.qrRequestedAt = null;
+      this.qrCode = null;
+      this.qrExpirationTimer = null;
+    }, this.qrRequestWindowMs);
+  }
+
+  /**
+   * Check if QR code generation is currently requested/allowed.
+   */
+  private isQRRequested(): boolean {
+    if (!this.qrRequestedAt) return false;
+    
+    const elapsedMs = Date.now() - this.qrRequestedAt;
+    const isWithinWindow = elapsedMs < this.qrRequestWindowMs;
+    
+    if (!isWithinWindow) {
+      // Window expired, clear the request
+      this.qrRequestedAt = null;
+      if (this.qrExpirationTimer) {
+        clearTimeout(this.qrExpirationTimer);
+        this.qrExpirationTimer = null;
+      }
+    }
+    
+    return isWithinWindow;
   }
 
   public async logout(): Promise<void> {
@@ -62,6 +108,12 @@ export class WhatsAppClient {
       this.sock = undefined;
       this.qrCode = null;
       this.reconnectAttempts = 0;
+      // Clear QR request state
+      this.qrRequestedAt = null;
+      if (this.qrExpirationTimer) {
+        clearTimeout(this.qrExpirationTimer);
+        this.qrExpirationTimer = null;
+      }
       // Don't re-initialize after manual logout
     } catch (error) {
       console.error('❌ Logout error:', error);
@@ -69,6 +121,12 @@ export class WhatsAppClient {
       this.sock = undefined;
       this.qrCode = null;
       this.reconnectAttempts = 0;
+      // Clear QR request state
+      this.qrRequestedAt = null;
+      if (this.qrExpirationTimer) {
+        clearTimeout(this.qrExpirationTimer);
+        this.qrExpirationTimer = null;
+      }
       // Don't throw - logout should be forgiving
     }
   }
@@ -76,6 +134,14 @@ export class WhatsAppClient {
   public async shutdown(): Promise<void> {
     console.log('🛑 Shutting down WhatsApp client...');
     try {
+      // Clear QR request state
+      if (this.qrExpirationTimer) {
+        clearTimeout(this.qrExpirationTimer);
+        this.qrExpirationTimer = null;
+      }
+      this.qrRequestedAt = null;
+      this.qrCode = null;
+      
       if (this.concurrencyController) {
         this.concurrencyController.stop();
       }
@@ -227,9 +293,14 @@ export class WhatsAppClient {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
-        console.log('📌 Scan the QR Code below to connect:');
-        this.qrCode = qr;
-        require('qrcode-terminal').generate(qr, { small: true });
+        // Only accept QR if it was explicitly requested by user
+        if (this.isQRRequested()) {
+          console.log('📌 Scan the QR Code below to connect:');
+          this.qrCode = qr;
+          require('qrcode-terminal').generate(qr, { small: true });
+        } else {
+          console.log('🛑 QR received but not requested. Suppressing QR generation. (Request QR via API to enable.)');
+        }
       }
 
       if (connection === 'close') {
@@ -287,6 +358,13 @@ export class WhatsAppClient {
           } catch (deleteError) {
             console.warn('⚠️ Failed to clear auth credentials (table might not exist):', deleteError);
           }
+          // Clear QR request state
+          this.qrRequestedAt = null;
+          if (this.qrExpirationTimer) {
+            clearTimeout(this.qrExpirationTimer);
+            this.qrExpirationTimer = null;
+          }
+          this.qrCode = null;
           await sessionManager.releaseLock();
           console.log('🔄 WhatsApp disconnected. Scan QR code via web interface to reconnect.');
           // Don't exit - let the server continue running
@@ -327,6 +405,12 @@ export class WhatsAppClient {
       } else if (connection === 'open') {
         console.log('✅ Representative Online!');
         this.qrCode = null;
+        // Clear QR request state on successful connection
+        this.qrRequestedAt = null;
+        if (this.qrExpirationTimer) {
+          clearTimeout(this.qrExpirationTimer);
+          this.qrExpirationTimer = null;
+        }
         this.lastConnectTime = Date.now();
         this.authResetAttempts = 0; // Reset on successful connection
 
