@@ -345,8 +345,13 @@ function showQRSection() {
     qrSection.style.display = 'block';
     statsGrid.style.display = 'none';
     
-    // Show the generate button state initially
-    resetQRCodeDisplay();
+    // Only reset if NOT currently displaying a QR code
+    const displayState = document.getElementById('qr-display-state');
+    if (displayState && displayState.style.display === 'none') {
+        // QR code is not being displayed, safe to reset
+        resetQRCodeDisplay();
+    }
+    // If QR is already being displayed, keep it visible
 }
 
 function resetQRCodeDisplay() {
@@ -388,6 +393,7 @@ function generateQRCode() {
     // Display the QR code
     generateState.style.display = 'none';
     displayState.style.display = 'block';
+    qrIsDisplayed = true; // Track that QR is currently being displayed
     
     if (currentQRData) {
         displayContent.innerHTML = `
@@ -418,6 +424,7 @@ function startQRTimer() {
         if (qrTimerRemaining <= 0) {
             clearInterval(qrTimerInterval);
             qrTimerInterval = null;
+            qrIsDisplayed = false; // Reset flag when QR expires
             
             // Hide the QR code and show regenerate button
             const displayContent = document.getElementById('qr-display-content');
@@ -441,6 +448,7 @@ function showQRCode(qrData) {
     // Store the data but don't display until user clicks Generate
     currentQRData = qrData;
     showQRSection();
+}
 
 function hideQRSection() {
     const qrSection = document.getElementById('qr-section');
@@ -448,13 +456,13 @@ function hideQRSection() {
 
     qrSection.style.display = 'none';
     statsGrid.style.display = 'grid';
+    qrIsDisplayed = false; // Reset flag when hiding QR
     
     // Clear any existing timers
     if (qrTimerInterval) {
         clearInterval(qrTimerInterval);
         qrTimerInterval = null;
     }
-}
 }
 
 // Onboarding overlay helpers
