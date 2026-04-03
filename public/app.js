@@ -299,45 +299,21 @@ async function checkStatus() {
     }
 }
 
-function updateConnectionStatus(status, qr = null) {
-    const statusEl = document.getElementById('connection-status');
-    const indicator = statusEl.querySelector('.status-indicator');
-    const label = statusEl.querySelector('.status-label');
-    const detail = statusEl.querySelector('.status-detail');
+function hideQRSection() {
+    const qrSection = document.getElementById('qr-section');
+    const statsGrid = document.getElementById('stats-grid');
 
-    indicator.className = 'status-indicator';
-
-    switch (status) {
-        case 'CONNECTED':
-            indicator.classList.add('connected');
-            label.textContent = 'Connected';
-            detail.textContent = 'WhatsApp is online';
-            hideQRSection();
-            hideOnboardingOverlay();
-            qrIsDisplayed = false; // Reset flag when connected
-            break;
-        case 'WAITING_FOR_QR':
-            label.textContent = 'Waiting for QR';
-            detail.textContent = 'Scan to connect';
-            // Only store NEW QR code if one isn't already being displayed
-            // This prevents the backend from overwriting the active QR code
-            if (!qrIsDisplayed && qr) {
-                currentQRData = qr;
-            }
-            showQRSection();
-            showOnboardingOverlay();
-            break;
-        default:
-            indicator.classList.add('disconnected');
-            label.textContent = 'Disconnected';
-            detail.textContent = 'Not connected';
-            hideQRSection();
-            showOnboardingOverlay();
-            qrIsDisplayed = false; // Reset flag when disconnected
+    qrSection.style.display = 'none';
+    statsGrid.style.display = 'grid';
+    qrIsDisplayed = false; // Reset flag when hiding QR
+    
+    // Clear any existing timers
+    if (qrTimerInterval) {
+        clearInterval(qrTimerInterval);
+        qrTimerInterval = null;
     }
 }
 
-// QR Code Display
 function showQRSection() {
     const qrSection = document.getElementById('qr-section');
     const statsGrid = document.getElementById('stats-grid');
@@ -442,7 +418,6 @@ function startQRTimer() {
     }, 1000);
 }
 
-// Old showQRCode function - kept for backwards compatibility but modified not to show immediately
 function showQRCode(qrData) {
     // This is called when status changes to WAITING_FOR_QR
     // Store the data but don't display until user clicks Generate
@@ -450,18 +425,41 @@ function showQRCode(qrData) {
     showQRSection();
 }
 
-function hideQRSection() {
-    const qrSection = document.getElementById('qr-section');
-    const statsGrid = document.getElementById('stats-grid');
+function updateConnectionStatus(status, qr = null) {
+    const statusEl = document.getElementById('connection-status');
+    const indicator = statusEl.querySelector('.status-indicator');
+    const label = statusEl.querySelector('.status-label');
+    const detail = statusEl.querySelector('.status-detail');
 
-    qrSection.style.display = 'none';
-    statsGrid.style.display = 'grid';
-    qrIsDisplayed = false; // Reset flag when hiding QR
-    
-    // Clear any existing timers
-    if (qrTimerInterval) {
-        clearInterval(qrTimerInterval);
-        qrTimerInterval = null;
+    indicator.className = 'status-indicator';
+
+    switch (status) {
+        case 'CONNECTED':
+            indicator.classList.add('connected');
+            label.textContent = 'Connected';
+            detail.textContent = 'WhatsApp is online';
+            hideQRSection();
+            hideOnboardingOverlay();
+            qrIsDisplayed = false; // Reset flag when connected
+            break;
+        case 'WAITING_FOR_QR':
+            label.textContent = 'Waiting for QR';
+            detail.textContent = 'Scan to connect';
+            // Only store NEW QR code if one isn't already being displayed
+            // This prevents the backend from overwriting the active QR code
+            if (!qrIsDisplayed && qr) {
+                currentQRData = qr;
+            }
+            showQRSection();
+            showOnboardingOverlay();
+            break;
+        default:
+            indicator.classList.add('disconnected');
+            label.textContent = 'Disconnected';
+            detail.textContent = 'Not connected';
+            hideQRSection();
+            showOnboardingOverlay();
+            qrIsDisplayed = false; // Reset flag when disconnected
     }
 }
 
