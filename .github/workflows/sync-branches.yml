@@ -1,0 +1,44 @@
+name: Sync All Branches
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git Config
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Sync crypto-remo branch
+        run: |
+          git checkout crypto-remo
+          git merge main --no-edit
+          git push origin crypto-remo
+
+      - name: Sync maichez_whatspp_agent branch
+        run: |
+          git checkout maichez_whatspp_agent
+          git merge main --no-edit
+          git push origin maichez_whatspp_agent
+
+      - name: Sync santa140 branch
+        run: |
+          git fetch origin santa140 2>/dev/null || true
+          if git rev-parse --verify origin/santa140 >/dev/null 2>&1; then
+            git checkout santa140
+            git merge main --no-edit
+            git push origin santa140
+          fi
+
+      - name: Return to main
+        run: git checkout main
