@@ -12,6 +12,7 @@ let chats = [];
 let qrTimerInterval = null;
 let qrTimerRemaining = 60; // 60 seconds
 let currentQRData = null;
+let qrIsDisplayed = false; // Flag to prevent overwriting active QR code
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
@@ -313,12 +314,16 @@ function updateConnectionStatus(status, qr = null) {
             detail.textContent = 'WhatsApp is online';
             hideQRSection();
             hideOnboardingOverlay();
+            qrIsDisplayed = false; // Reset flag when connected
             break;
         case 'WAITING_FOR_QR':
             label.textContent = 'Waiting for QR';
             detail.textContent = 'Scan to connect';
-            // Store the QR code data but don't show it immediately
-            currentQRData = qr;
+            // Only store NEW QR code if one isn't already being displayed
+            // This prevents the backend from overwriting the active QR code
+            if (!qrIsDisplayed && qr) {
+                currentQRData = qr;
+            }
             showQRSection();
             showOnboardingOverlay();
             break;
@@ -328,6 +333,7 @@ function updateConnectionStatus(status, qr = null) {
             detail.textContent = 'Not connected';
             hideQRSection();
             showOnboardingOverlay();
+            qrIsDisplayed = false; // Reset flag when disconnected
     }
 }
 

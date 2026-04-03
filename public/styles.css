@@ -539,6 +539,46 @@ body .communities-stats-row {
     box-shadow: 0 0 15px rgba(34, 211, 238, 0.3);
 }
 
+.page-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.btn-header-action {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid var(--border);
+    color: var(--primary);
+    padding: 0.75rem 1rem;
+    border-radius: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    backdrop-filter: blur(5px);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+[data-theme="dark"] .btn-header-action {
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.btn-header-action:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent);
+    box-shadow: 0 0 15px rgba(34, 211, 238, 0.3);
+    transform: translateY(-2px);
+}
+
+.btn-header-action .btn-text {
+    display: none;
+}
+
 /* Brighter Glassmorphism Cards */
 .stat-card,
 .qr-card,

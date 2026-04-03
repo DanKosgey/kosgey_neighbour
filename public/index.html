@@ -403,13 +403,21 @@
             <div class="page active" id="dashboard-page">
                 <header class="page-header">
                     <h2>Dashboard</h2>
-                    <button class="btn-refresh" id="refresh-btn">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd"
-                                d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
-                                clip-rule="evenodd" />
-                        </svg>
-                    </button>
+                    <div class="page-header-actions">
+                        <button class="btn-header-action" onclick="switchPage('guide')" title="View Guide" aria-label="Open Guide">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+                            </svg>
+                            <span class="btn-text">Guide</span>
+                        </button>
+                        <button class="btn-refresh" id="refresh-btn">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd"
+                                    d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+                                    clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
                 </header>
 
                 <!-- QR Code Section -->
@@ -573,6 +581,12 @@
                             </svg>
                             <input type="text" placeholder="Search conversations…" id="chat-search" autocomplete="off">
                         </div>
+                        <button class="btn-header-action" onclick="switchPage('guide')" title="View Guide" aria-label="Open Guide">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+                            </svg>
+                            <span class="btn-text">Guide</span>
+                        </button>
                         <button class="btn-refresh btn-refresh-chats" id="refresh-chats-btn" aria-label="Refresh Chats">
                             <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd"
@@ -676,6 +690,12 @@
                         <h2>Contacts</h2>
                     </div>
                     <div style="display: flex; gap: 1rem; align-items: center;">
+                        <button class="btn-header-action" onclick="switchPage('guide')" title="View Guide" aria-label="Open Guide">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+                            </svg>
+                            <span class="btn-text">Guide</span>
+                        </button>
                         <div class="search-box">
                             <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd"
@@ -684,6 +704,12 @@
                             </svg>
                             <input type="text" placeholder="Search contacts..." id="contact-search">
                         </div>
+                        <button class="btn-header-action" onclick="switchPage('guide')" title="View Guide" aria-label="Open Guide">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+                            </svg>
+                            <span class="btn-text">Guide</span>
+                        </button>
                         <button class="btn-refresh" id="refresh-contacts-btn" aria-label="Refresh Contacts">
                             <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd"
@@ -719,6 +745,12 @@
                         <h2>Communities</h2>
                     </div>
                     <div style="display: flex; gap: 1rem; align-items: center;">
+                        <button class="btn-header-action" onclick="switchPage('guide')" title="View Guide" aria-label="Open Guide">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+                            </svg>
+                            <span class="btn-text">Guide</span>
+                        </button>
                         <div class="search-box">
                             <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                                 <path fill-rule="evenodd"
@@ -1764,6 +1796,14 @@ Actions: Run iPhone campaign, clarify warranty info
                         </button>
                         <h2>ShopFlow Manager</h2>
                     </div>
+                    <div class="page-header-actions">
+                        <button class="btn-header-action" onclick="switchPage('guide')" title="View Guide" aria-label="Open Guide">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+                            </svg>
+                            <span class="btn-text">Guide</span>
+                        </button>
+                    </div>
                 </header>
 
                 <!-- Views Container -->
@@ -2009,7 +2049,15 @@ Actions: Run iPhone campaign, clarify warranty info
                         </button>
                         <h2>🤖 AI Agent Profile</h2>
                     </div>
-                    <button class="btn-primary" id="save-ai-profile">Save Changes</button>
+                    <div class="page-header-actions">
+                        <button class="btn-header-action" onclick="switchPage('guide')" title="View Guide" aria-label="Open Guide">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+                            </svg>
+                            <span class="btn-text">Guide</span>
+                        </button>
+                        <button class="btn-primary" id="save-ai-profile">Save Changes</button>
+                    </div>
                 </header>
 
                 <div class="profile-container">
@@ -2092,7 +2140,15 @@ Actions: Run iPhone campaign, clarify warranty info
                         </button>
                         <h2>👤 Your Profile</h2>
                     </div>
-                    <button class="btn-primary" id="save-user-profile">Save Changes</button>
+                    <div class="page-header-actions">
+                        <button class="btn-header-action" onclick="switchPage('guide')" title="View Guide" aria-label="Open Guide">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"></path>
+                            </svg>
+                            <span class="btn-text">Guide</span>
+                        </button>
+                        <button class="btn-primary" id="save-user-profile">Save Changes</button>
+                    </div>
                 </header>
 
                 <div class="profile-container">

@@ -103,6 +103,33 @@
 /* Media Queries */
 @media (max-width: 768px) {
 
+    /* Page Header Mobile */
+    .page-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .page-header h2 {
+        font-size: 1.75rem;
+    }
+
+    .page-header-actions {
+        gap: 0.5rem;
+    }
+
+    .btn-header-action {
+        padding: 0.5rem;
+        border-radius: 10px;
+    }
+
+    .btn-header-action .btn-text {
+        display: inline;
+        font-size: 0.75rem;
+    }
+
+    .btn-refresh {
+        padding: 0.5rem;
+    }
+
     /* Layout Adjustments */
     .app-container {
         flex-direction: column;
