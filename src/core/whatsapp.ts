@@ -466,27 +466,34 @@ export class WhatsAppClient {
       }
     });
 
-    // Track Group Updates
+    // Track Group Updates — fire syncs in parallel, non-blocking.
+    // groupService has its own deduplication + concurrency throttle so
+    // simultaneous calls are safe and self-regulating.
     this.sock.ev.on('groups.update', async (updates) => {
       const { groupService } = await import('../services/groupService');
 
       // Process group updates with rate limiting to avoid 429 errors
       for (const update of updates) {
-        try {
-          // Use rate limiter to fetch metadata with exponential backoff
-          const metadata = await groupMetadataLimiter.execute(
-            () => this.sock!.groupMetadata(update.id!),
-            `groups.update(${update.id})`
-          );
-          await groupService.syncGroup(update.id!, metadata);
-        } catch (e) {
-          const isRateLimit = (e as any)?.data === 429 || (e as any)?.message?.includes('rate-overlimit');
-          if (isRateLimit) {
-            console.warn(`⏱️ Rate limited while syncing group ${update.id}, will retry on next update event`);
-          } else {
-            console.error(`Failed to sync updated group ${update.id}:`, e);
+        // Fire-and-forget: fetch metadata then hand off to groupService.
+        // We don't await here so multiple updates process concurrently
+        // without blocking each other or the WhatsApp event loop.
+        (async () => {
+          try {
+            const metadata = await groupMetadataLimiter.execute(
+              () => this.sock!.groupMetadata(update.id!),
+              `groups.update(${update.id})`
+            );
+            // groupService internally deduplicates & throttles — safe to call freely
+            await groupService.syncGroup(update.id!, metadata);
+          } catch (e) {
+            const isRateLimit = (e as any)?.data === 429 || (e as any)?.message?.includes('rate-overlimit');
+            if (isRateLimit) {
+              // Expected during bursts — groupService will catch next update
+            } else {
+              console.error(`Failed to sync updated group ${update.id}:`, e);
+            }
           }
-        }
+        })();
       }
     });
 

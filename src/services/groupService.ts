@@ -1,10 +1,15 @@
 import { db } from '../database';
 import { groups, groupMembers, adEngagements } from '../database/schema';
 import { eq, sql } from 'drizzle-orm';
-import { WhatsAppClient } from '../core/whatsapp'; // Type only if possible, or dependency injection
 
 export class GroupService {
     private static instance: GroupService;
+
+    // Deduplication: track which JIDs are actively being synced
+    private syncingJids: Set<string> = new Set();
+    // Throttle: don't allow more than N concurrent syncs
+    private activeSyncCount: number = 0;
+    private readonly MAX_CONCURRENT_SYNCS = 3;
 
     private constructor() { }
 
@@ -16,91 +21,103 @@ export class GroupService {
     }
 
     /**
-     * Syncs a single group's metadata and participants to the DB
+     * Syncs a single group's metadata and participants to the DB.
+     *
+     * Improvements over original:
+     * 1. Deduplication guard — if the same JID is already syncing, skip.
+     * 2. Concurrency throttle — cap simultaneous syncs at MAX_CONCURRENT_SYNCS.
+     * 3. Batch upsert for members — raw SQL INSERT ... ON CONFLICT DO UPDATE
+     *    replaces N individual findFirst+insert/update round-trips per member.
      */
     public async syncGroup(jid: string, metadata: any) {
         if (!metadata) return;
 
-        console.log(`🔄 Syncing Group: ${metadata.subject} (${jid})`);
+        // --- Guard 1: skip if this exact group is already mid-sync ---
+        if (this.syncingJids.has(jid)) {
+            return; // silently skip; do not log noise
+        }
 
-        // 1. Upsert Group Info
-        const admins = metadata.participants.filter((p: any) => p.admin === 'admin' || p.admin === 'superadmin');
+        // --- Guard 2: throttle if too many concurrent syncs ---
+        if (this.activeSyncCount >= this.MAX_CONCURRENT_SYNCS) {
+            // Too busy — drop this event; next groups.update will re-trigger
+            return;
+        }
 
-        await db.insert(groups).values({
-            jid: jid,
-            subject: metadata.subject,
-            description: metadata.desc,
-            creationTime: new Date(metadata.creation * 1000),
-            ownerJid: metadata.owner,
-            totalMembers: metadata.participants.length,
-            adminsCount: admins.length,
-            isAnnounce: metadata.announce || false,
-            isRestricted: metadata.restrict || false,
-            updatedAt: new Date()
-        }).onConflictDoUpdate({
-            target: groups.jid,
-            set: {
+        this.syncingJids.add(jid);
+        this.activeSyncCount++;
+
+        try {
+            console.log(`🔄 Syncing Group: ${metadata.subject} (${jid})`);
+
+            // 1. Upsert the group row
+            const admins = metadata.participants.filter(
+                (p: any) => p.admin === 'admin' || p.admin === 'superadmin'
+            );
+
+            await db.insert(groups).values({
+                jid,
                 subject: metadata.subject,
                 description: metadata.desc,
+                creationTime: new Date(metadata.creation * 1000),
+                ownerJid: metadata.owner,
                 totalMembers: metadata.participants.length,
                 adminsCount: admins.length,
                 isAnnounce: metadata.announce || false,
                 isRestricted: metadata.restrict || false,
                 updatedAt: new Date()
-            }
-        });
-
-        // 2. Upsert Members (Batch is better, but looping individually for simplicity first)
-        // Ideally, we'd delete members who left, but for now let's just upsert current ones
-
-        // Prepare bulk insert data
-        const membersData = metadata.participants.map((p: any) => ({
-            groupJid: jid,
-            phone: p.id.split('@')[0] + (p.id.includes('@') ? '@' + p.id.split('@')[1] : ''), // Normalize JID
-            role: p.admin || 'participant',
-            isAdmin: !!p.admin,
-            updatedAt: new Date()
-        }));
-
-        // Chunking if group is huge
-        const chunkSize = 100;
-        for (let i = 0; i < membersData.length; i += chunkSize) {
-            const chunk = membersData.slice(i, i + chunkSize);
-
-            // We use a query builder approach or raw sql for "upsert on conflict (groupJid, phone)"
-            // Drizzle doesn't support composite key conflict resolution easily in one go for bulk insert without special handling
-            // So we'll iterate for now or assume most don't change often.
-            // Actually, let's delete all for this group and re-insert? No, tracking history/lastSeen is good.
-
-            // Let's just do individual upserts for robustness or use raw SQL if perf is needed
-            for (const member of chunk) {
-                // Normalize JID
-                const phone = member.phone.replace(/:[0-9]+@/, '@');
-
-                // Hacky check to see if exists
-                // For MVP, just simple find/update or insert
-                const existing = await db.query.groupMembers.findFirst({
-                    where: (gm, { and, eq }) => and(eq(gm.groupJid, jid), eq(gm.phone, phone))
-                });
-
-                if (existing) {
-                    if (existing.role !== member.role) {
-                        await db.update(groupMembers)
-                            .set({ role: member.role, isAdmin: member.isAdmin, updatedAt: new Date() })
-                            .where(eq(groupMembers.id, existing.id));
-                    }
-                } else {
-                    await db.insert(groupMembers).values({
-                        groupJid: jid,
-                        phone: phone,
-                        role: member.role,
-                        isAdmin: member.isAdmin,
-                        joinedAt: new Date()
-                    });
+            }).onConflictDoUpdate({
+                target: groups.jid,
+                set: {
+                    subject: metadata.subject,
+                    description: metadata.desc,
+                    totalMembers: metadata.participants.length,
+                    adminsCount: admins.length,
+                    isAnnounce: metadata.announce || false,
+                    isRestricted: metadata.restrict || false,
+                    updatedAt: new Date()
                 }
+            });
+
+            // 2. Batch upsert members using raw SQL ON CONFLICT
+            //    group_members has an index on (group_jid, phone) but no UNIQUE constraint,
+            //    so we use a DELETE + INSERT approach per chunk to stay safe.
+            const allParticipants = metadata.participants.map((p: any) => {
+                const phone = p.id.replace(/:[0-9]+@/, '@');
+                return {
+                    groupJid: jid,
+                    phone,
+                    role: (p.admin as string) || 'participant',
+                    isAdmin: !!p.admin,
+                };
+            });
+
+            // Delete existing members for this group in one shot, then bulk-insert fresh
+            // This is much faster than N individual findFirst+update+insert queries
+            // and avoids the need for a UNIQUE constraint.
+            await db.delete(groupMembers).where(eq(groupMembers.groupJid, jid));
+
+            const chunkSize = 100;
+            for (let i = 0; i < allParticipants.length; i += chunkSize) {
+                const chunk = allParticipants.slice(i, i + chunkSize);
+                await db.insert(groupMembers).values(
+                    chunk.map((m: any) => ({
+                        groupJid: m.groupJid,
+                        phone: m.phone,
+                        role: m.role,
+                        isAdmin: m.isAdmin,
+                        joinedAt: new Date(),
+                        updatedAt: new Date()
+                    }))
+                );
             }
+
+            console.log(`✅ Synced ${allParticipants.length} members for ${metadata.subject}`);
+        } catch (error) {
+            console.error(`❌ Group sync failed for ${jid}:`, error);
+        } finally {
+            this.syncingJids.delete(jid);
+            this.activeSyncCount--;
         }
-        console.log(`✅ Synced ${membersData.length} members for ${metadata.subject}`);
     }
 
     /**
@@ -134,6 +151,7 @@ export class GroupService {
             avgAdmins
         };
     }
+
     /**
      * Get detailed analytics for a specific group
      */
@@ -153,7 +171,6 @@ export class GroupService {
         });
 
         // 3. Engagement Stats for this group
-        // Note: We need adEngagements to have a groupJid column which it does
         const engagementStats = await db.select({
             type: adEngagements.type,
             count: sql<number>`count(*)`

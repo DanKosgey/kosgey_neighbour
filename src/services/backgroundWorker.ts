@@ -54,17 +54,12 @@ export class BackgroundWorker {
             }
         }, 60 * 60 * 1000); // 1 hour
 
-        // Start Marketing Scheduler
-        const { WhatsAppClient } = await import('../core/whatsapp');
-        const { schedulerService } = await import('./schedulerService');
-        const whatsappClient = new WhatsAppClient(); // Get existing instance if possible
-        schedulerService.start(whatsappClient);
-
         console.log('✅ BackgroundWorker started');
         console.log('   - Message queue: every 10s');
         console.log('   - Report queue: every 30s');
         console.log('   - Cleanup: every 1h');
-        console.log('   - Marketing Scheduler: active');
+        // NOTE: Marketing Scheduler is started in whatsapp.ts (schedulerService.init) on connection.open
+        //       Do NOT start it here - that would create a second scheduler with a dead WhatsApp client
     }
 
     /**
@@ -92,9 +87,7 @@ export class BackgroundWorker {
             this.cleanupInterval = null;
         }
 
-        // Stop Marketing Scheduler
-        const { schedulerService } = await import('./schedulerService');
-        schedulerService.stop();
+        // Marketing Scheduler is managed by whatsapp.ts - no stop needed here
 
         this.isRunning = false;
         console.log('✅ BackgroundWorker stopped');

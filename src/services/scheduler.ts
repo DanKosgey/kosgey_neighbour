@@ -1,7 +1,6 @@
 import cron, { ScheduledTask } from 'node-cron';
 import { eq } from 'drizzle-orm';
 import { WhatsAppClient } from '../core/whatsapp';
-import { ownerService } from './ownerService';
 import { db } from '../database';
 import { userProfile, marketingCampaigns } from '../database/schema';
 
@@ -9,27 +8,41 @@ export class SchedulerService {
     private client: WhatsAppClient | undefined;
     private tasks: ScheduledTask[] = [];
 
+    // Guard: prevent two simultaneous tick executions from colliding
+    private isCheckingSlots: boolean = false;
+
+    // Cache timezone so we don't hit the DB every single minute
+    private cachedTimezone: string | null = null;
+    private timezoneLastFetched: number = 0;
+    private readonly TIMEZONE_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
     init(client: WhatsAppClient) {
         this.client = client;
         this.start();
     }
 
     async start() {
-        this.stop();
+        this.stop(); // Ensure no stale tasks from previous connection
         console.log('⏰ Starting Scheduler Service (Dynamic Mode)...');
 
-        // Main Minutely Heartbeat
-        // Checks every minute for any campaign that has a scheduled slot matching current time
+        // --- Main per-minute heartbeat ---
+        // Checks every minute whether any campaign has a slot matching now
         const task = cron.schedule('* * * * *', async () => {
-            this.checkAndExecuteSlots();
+            await this.checkAndExecuteSlots();
         });
-
         this.tasks.push(task);
         console.log('✅ Scheduler initialized: Monitoring active campaigns every minute.');
 
-        // Self-Ping Every 10 Minutes (Keep-Alive)
+        // --- Random content every 2 hours ---
+        const randomContentTask = cron.schedule('0 */2 * * *', async () => {
+            await this.broadcastRandomContent();
+        });
+        this.tasks.push(randomContentTask);
+        console.log('✅ Random content scheduler initialized: Every 2 hours.');
+
+        // --- Self-ping every 10 minutes (keep-alive for Render free tier) ---
         const pingTask = cron.schedule('*/10 * * * *', async () => {
-            this.runSelfPing();
+            await this.runSelfPing();
         });
         this.tasks.push(pingTask);
         console.log('✅ Self-ping scheduler initialized: Every 10 minutes.');
@@ -42,10 +55,9 @@ export class SchedulerService {
                 ? `${process.env.RENDER_EXTERNAL_URL}/health`
                 : `http://localhost:${port}/health`;
 
-            console.log(`💓 Sending keep-alive ping to ${url}...`);
             const response = await fetch(url);
             if (response.ok) {
-                console.log('✅ Keep-alive ping successful (200 OK)');
+                console.log('💓 Keep-alive ping OK');
             } else {
                 console.error(`⚠️ Keep-alive ping returned status: ${response.status}`);
             }
@@ -54,19 +66,82 @@ export class SchedulerService {
         }
     }
 
+    private async broadcastRandomContent() {
+        try {
+            console.log('🎲 Generating random content for broadcast...');
+            // Optional dependency import inside the logic so it doesn't break if unused
+            const { randomContentService } = await import('./marketing/randomContentService');
 
+            const randomContent = await randomContentService.generateRandomContent();
+            const message = randomContentService.formatForWhatsApp(randomContent);
+
+            if (!this.client) {
+                console.error('❌ WhatsApp client not available for random content broadcast');
+                return;
+            }
+
+            const groups = await this.client.getAllGroups();
+
+            if (groups.length === 0) {
+                console.log('⚠️ No groups found for random content broadcast');
+                return;
+            }
+
+            console.log(`📢 Broadcasting random ${randomContent.type} to ${groups.length} groups...`);
+
+            for (const groupJid of groups) {
+                try {
+                    await this.client.sendText(groupJid, message);
+                    console.log(`✅ Random content sent to ${groupJid}`);
+
+                    if (groups.indexOf(groupJid) < groups.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 5000));
+                    }
+                } catch (error) {
+                    console.error(`❌ Failed to send random content to ${groupJid}:`, error);
+                }
+            }
+
+            console.log('✅ Random content broadcast complete');
+        } catch (error) {
+            console.error('❌ Random content broadcast failed:', error);
+        }
+    }
+
+    private async getTimezone(): Promise<string> {
+        const now = Date.now();
+        // Return cached value if still fresh
+        if (this.cachedTimezone && (now - this.timezoneLastFetched) < this.TIMEZONE_CACHE_TTL_MS) {
+            return this.cachedTimezone;
+        }
+
+        try {
+            const profile = await db.query.userProfile.findFirst();
+            const tz = profile?.timezone || 'Africa/Nairobi'; // Default to Kenya Time
+            this.cachedTimezone = tz;
+            this.timezoneLastFetched = now;
+            return tz;
+        } catch (e) {
+            // If DB is unavailable just use cached or fallback
+            if (this.cachedTimezone) return this.cachedTimezone;
+            return 'Africa/Nairobi';
+        }
+    }
 
     private async checkAndExecuteSlots() {
-        try {
-            // 1. Get Current Time and Timezone
-            let timezone = 'Africa/Nairobi'; // Default to Kenya Time
-            // Try to find owner timezone (cached or fresh)
-            // For efficiency, we might want to cache this, but DB query is fast enough for minutely
-            const profile = await db.query.userProfile.findFirst();
-            if (profile?.timezone) timezone = profile.timezone;
+        // --- Execution guard: skip if previous tick is still running ---
+        if (this.isCheckingSlots) {
+            console.log('⚠️ Scheduler: previous tick still running, skipping this minute.');
+            return;
+        }
 
+        this.isCheckingSlots = true;
+        try {
+            // 1. Resolve user timezone (cached)
+            const timezone = await this.getTimezone();
+
+            // 2. Format current time in user's timezone as HH:mm
             const now = new Date();
-            // Format current time in user's timezone as HH:mm
             const currentTime = now.toLocaleTimeString('en-GB', {
                 timeZone: timezone,
                 hour: '2-digit',
@@ -76,76 +151,78 @@ export class SchedulerService {
 
             console.log(`⏱️ Scheduler Tick: ${currentTime} (${timezone})`);
 
-            // 2. Fetch Active Campaigns
-            const campaigns = await db.query.marketingCampaigns.findMany({
-                where: eq(marketingCampaigns.status, 'active')
-            });
+            // 3. Fetch all active campaigns
+            let campaigns: any[] = [];
+            try {
+                campaigns = await db.query.marketingCampaigns.findMany({
+                    where: eq(marketingCampaigns.status, 'active')
+                });
+            } catch (dbErr: any) {
+                console.error('❌ Scheduler: DB error fetching campaigns:', dbErr.message || dbErr);
+                return; // Will retry next minute
+            }
 
             if (!campaigns.length) {
-                // console.log('No active campaigns found.'); // Optional: reduce noise
+                console.log('📭 Scheduler: No active campaigns found. Nothing to do.');
                 return;
             }
 
-            console.log(`🔎 Found ${campaigns.length} active campaigns. Checking schedules...`);
-            campaigns.forEach(c => {
-                console.log(`   - '${c.name}' (ID: ${c.id}) schedule: M=${c.morningTime || '-'}, A=${c.afternoonTime || '-'}, E=${c.eveningTime || '-'}`);
-            });
+            console.log(`📋 Scheduler: Found ${campaigns.length} active campaign(s). Checking slots...`);
 
-            // 3. Check Each Campaign
+            // 4. Check each campaign for a time match — run matched slots in parallel
+            const triggers: Promise<void>[] = [];
+
             for (const campaign of campaigns) {
-                // Determine if any slot matches current time
-                if (campaign.morningTime === currentTime) {
-                    this.triggerSlot(campaign, 'ad_morning');
-                } else if (campaign.afternoonTime === currentTime) {
-                    this.triggerSlot(campaign, 'ad_afternoon');
-                } else if (campaign.eveningTime === currentTime) {
-                    this.triggerSlot(campaign, 'ad_evening');
+                const morning = campaign.morningTime;
+                const afternoon = campaign.afternoonTime;
+                const evening = campaign.eveningTime;
+
+                console.log(
+                    `  📌 "${campaign.name}" — ` +
+                    `morning=${morning || 'none'} | ` +
+                    `afternoon=${afternoon || 'none'} | ` +
+                    `evening=${evening || 'none'}`
+                );
+
+                if (morning && morning === currentTime) {
+                    console.log(`  ✅ MATCH: morning slot for "${campaign.name}"`);
+                    triggers.push(this.triggerSlot(campaign, 'ad_morning'));
+                } else if (afternoon && afternoon === currentTime) {
+                    console.log(`  ✅ MATCH: afternoon slot for "${campaign.name}"`);
+                    triggers.push(this.triggerSlot(campaign, 'ad_afternoon'));
+                } else if (evening && evening === currentTime) {
+                    console.log(`  ✅ MATCH: evening slot for "${campaign.name}"`);
+                    triggers.push(this.triggerSlot(campaign, 'ad_evening'));
                 }
-                // Note: Facts are currently global hardcoded slots in old logic.
-                // If we want facts per campaign, we'd need fact times.
-                // For now, let's keep facts simpler or bind them to same times?
-                // The user only complained about "ads posting not following time".
-                // We'll leave facts out of the per-campaign logic for now or add them relative to ads if requested.
-                // Wait, old scheduler had specific fact slots. 
-                // Let's add standard fact slots at global times if needed, OR just focus on ads as requested.
-                // User: "ads posting is not following...".
-                // I will focus on Ads for now to solve the specific complaint.
+            }
+
+            if (triggers.length === 0) {
+                console.log('⏭️ Scheduler: No slots matched current time. Waiting...');
+            } else {
+                console.log(`🚀 Scheduler: Firing ${triggers.length} slot(s)...`);
+                // Run all matched triggers concurrently — each has its own error handling
+                await Promise.allSettled(triggers);
             }
 
         } catch (error) {
             console.error('❌ Scheduler Error:', error);
+        } finally {
+            this.isCheckingSlots = false;
         }
     }
 
-    private async triggerSlot(campaign: any, slotType: string) {
-        console.log(`⏰ Triggering ${slotType} for campaign '${campaign.name}'`);
+    private async triggerSlot(campaign: any, slotType: string): Promise<void> {
+        console.log(`⏰ Triggering ${slotType} for campaign "${campaign.name}" (id=${campaign.id})`);
         try {
-            const { marketingService } = await import('./marketing/marketingService');
-            if (this.client) {
-                // We need to call a method that runs ONE campaign, not all.
-                // executeMarketingSlot currently runs ALL active campaigns.
-                // We need `executeCampaignSlot(client, campaign, slotType)`
-                // But executeMarketingSlot is defined as:
-                // executeMarketingSlot(client, slotType) -> Fetches all.
-
-                // I should add a method to MarketingService or use a workaround.
-                // Workaround: Modify executeMarketingSlot to accept optional specific campaign?
-                // Or just handle logic here? 
-                // Better: Call new method in MarketingService `executeSingleCampaignSlot`.
-
-                // Since I can't easily change MarketingService in this single file edit without breakage,
-                // I'll call a new method I'll add to MarketingService next, OR 
-                // I'll reuse executeMarketingSlot but filter inside it? No, that's messy.
-                // I will add `executeSingleCampaignSlot` to MarketingService in the next step.
-                // For now, I'll assume it exists or use the existing one and accept it might run all?
-                // NO, running all would mean if Campaign A matches 09:00, it runs A, B, C...
-                // B might be scheduled for 10:00. Running it at 09:00 is WRONG.
-
-                // So I MUST implement `executeSingleCampaignSlot`.
-                await marketingService.executeSingleCampaignSlot(this.client, campaign, slotType);
+            if (!this.client) {
+                console.error(`❌ Cannot trigger ${slotType} for "${campaign.name}": WhatsApp client is not ready.`);
+                return;
             }
+            const { marketingService } = await import('./marketing/marketingService');
+            await marketingService.executeSingleCampaignSlot(this.client, campaign, slotType);
+            console.log(`✅ Slot ${slotType} completed for "${campaign.name}"`);
         } catch (error) {
-            console.error(`❌ Failed to trigger ${slotType} for ${campaign.name}:`, error);
+            console.error(`❌ Failed to trigger ${slotType} for "${campaign.name}":`, error);
         }
     }
 
@@ -153,6 +230,7 @@ export class SchedulerService {
         if (this.tasks.length > 0) {
             this.tasks.forEach(task => task.stop());
             this.tasks = [];
+            console.log('🛑 Scheduler Service stopped.');
         }
     }
 }
