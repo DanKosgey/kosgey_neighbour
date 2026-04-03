@@ -114,6 +114,38 @@ export class SystemSettingsService {
         );
         console.log('✅ Calendar access DISABLED');
     }
+
+    /**
+     * Get chat agent reply status
+     */
+    async isChatAgentEnabled(): Promise<boolean> {
+        const val = await this.get('chat_agent_enabled', 'true');
+        return (val ?? 'true').toLowerCase() === 'true';
+    }
+
+    /**
+     * Enable chat agent (AI auto-replies to DMs)
+     */
+    async enableChatAgent(): Promise<void> {
+        await this.set(
+            'chat_agent_enabled',
+            'true',
+            'Toggle for AI auto-reply to user DMs. When disabled, bot only broadcasts ads to groups'
+        );
+        console.log('🤖 Chat Agent ENABLED - AI will reply to incoming messages');
+    }
+
+    /**
+     * Disable chat agent (bot only broadcasts, no auto-replies)
+     */
+    async disableChatAgent(): Promise<void> {
+        await this.set(
+            'chat_agent_enabled',
+            'false',
+            'Toggle for AI auto-reply to user DMs. When disabled, bot only broadcasts ads to groups'
+        );
+        console.log('🔇 Chat Agent DISABLED - Bot will only broadcast ads, not reply to messages');
+    }
 }
 
 export const systemSettingsService = new SystemSettingsService();

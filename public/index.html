@@ -1157,6 +1157,56 @@
                         </div>
                     </div>
 
+                    <!-- Chat Agent Features Section -->
+                    <div class="settings-section">
+                        <div class="settings-section-header">
+                            <div class="settings-icon"
+                                style="background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                                    <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3>Chat Agent</h3>
+                                <p>Control AI auto-reply feature and engagement settings</p>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-label">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"
+                                        style="opacity: 0.6;">
+                                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
+                                    </svg>
+                                    <div>
+                                        <label>Enable Chat Agent</label>
+                                        <p>Allow AI to auto-reply to incoming DMs and engage with users</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="chat-agent-toggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+
+                        <div id="chat-agent-status" style="margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--bg-light); font-size: 0.9rem; color: var(--text-secondary);">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <span id="chat-agent-status-icon">⏳</span>
+                                <span id="chat-agent-status-text">Loading status...</span>
+                            </div>
+                            <p style="margin: 0; font-size: 0.85rem; opacity: 0.7;">
+                                <strong>Enabled:</strong> Bot responds to user messages and engages in conversations while broadcasting ads.<br>
+                                <strong>Disabled:</strong> Bot focuses purely on broadcasting ads to groups without auto-replying to DMs.
+                            </p>
+                        </div>
+
+                        <button id="save-chat-agent-btn" class="btn-primary" style="margin-top: 12px; width: 100%;">
+                            <span class="btn-text">Save Chat Agent Settings</span>
+                        </button>
+                    </div>
+
                     <!-- Danger Zone Section -->
                     <div class="settings-section danger-section">
                         <div class="settings-section-header">
@@ -1192,6 +1242,29 @@
                                         d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z" />
                                 </svg>
                                 Disconnect
+                            </button>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <div class="setting-label">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"
+                                        style="opacity: 0.6; color: var(--danger);">
+                                        <path
+                                            d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-9l-1 1H5v2h14V4z" />
+                                    </svg>
+                                    <div>
+                                        <label>Reset Database</label>
+                                        <p>Erase all data from all tables (cannot be undone)</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="btn-danger" id="reset-database-btn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path
+                                        d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-9l-1 1H5v2h14V4z" />
+                                </svg>
+                                Reset Database
                             </button>
                         </div>
                     </div>

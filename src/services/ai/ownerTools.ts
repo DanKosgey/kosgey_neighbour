@@ -246,3 +246,43 @@ export async function getCalendarAccessStatus(): Promise<string> {
         return `❌ Error retrieving calendar access status: ${error.message}`;
     }
 }
+
+/**
+ * Enable chat agent (AI auto-replies to DMs)
+ */
+export async function enableChatAgent(): Promise<string> {
+    try {
+        await systemSettingsService.enableChatAgent();
+        return `✅ Chat Agent ENABLED\n\n🤖 The AI will now AUTO-REPLY to incoming DMs from contacts.\n\nFeatures:\n- Responds to customer inquiries\n- Processes conversation context\n- Uses full AI capabilities for engagement\n\nThe bot will continue broadcasting ads to groups while also responding to individual messages.`;
+    } catch (error: any) {
+        console.error('Failed to enable chat agent:', error);
+        return `❌ Error enabling chat agent: ${error.message}`;
+    }
+}
+
+/**
+ * Disable chat agent (bot only broadcasts ads, no auto-replies)
+ */
+export async function disableChatAgent(): Promise<string> {
+    try {
+        await systemSettingsService.disableChatAgent();
+        return `🔇 Chat Agent DISABLED\n\n📢 The bot will ONLY BROADCAST ads to groups.\n\nFeatures when disabled:\n- ❌ No AI auto-replies to DMs\n- ❌ No conversation engagement\n- ✅ Still broadcasts ads to target groups\n- ✅ Still logs incoming messages for context\n\nThis mode is useful when you want the bot to focus purely on advertising without responding to customer inquiries.`;
+    } catch (error: any) {
+        console.error('Failed to disable chat agent:', error);
+        return `❌ Error disabling chat agent: ${error.message}`;
+    }
+}
+
+/**
+ * Get current chat agent status
+ */
+export async function getChatAgentStatus(): Promise<string> {
+    try {
+        const isEnabled = await systemSettingsService.isChatAgentEnabled();
+        const status = isEnabled ? '✅ ENABLED (Auto-reply mode)' : '🔇 DISABLED (Broadcast-only mode)';
+        return `🤖 Chat Agent Status: ${status}\n\nCurrent mode:\n${isEnabled ? '- AI will reply to incoming DMs\n- Full conversation engagement active' : '- Bot only broadcasts ads to groups\n- No auto-replies to DMs\n- Messages are logged but ignored'}\n\nUse "enable chat agent" or "disable chat agent" to change this setting.`;
+    } catch (error: any) {
+        console.error('Failed to get chat agent status:', error);
+        return `❌ Error retrieving chat agent status: ${error.message}`;
+    }
+}

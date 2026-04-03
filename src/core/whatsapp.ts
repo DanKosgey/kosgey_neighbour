@@ -36,6 +36,8 @@ export class WhatsAppClient {
   private qrCode: string | null = null;
   private lastConnectTime: number = 0;
   private isLoggingOut: boolean = false;
+  private authResetAttempts: number = 0;
+  private maxAuthResetAttempts: number = 3;
 
   constructor() { }
 
@@ -52,17 +54,22 @@ export class WhatsAppClient {
       if (this.sock) {
         console.log('📤 Logging out from WhatsApp...');
         await this.sock.logout();
-        this.sock = undefined;
-        this.qrCode = null;
-        this.reconnectAttempts = 0;
         console.log('✅ Logged out successfully');
-        setTimeout(() => this.initialize(), 2000);
       } else {
         console.log('⚠️ No active connection to logout from');
       }
+      // Always clean up state
+      this.sock = undefined;
+      this.qrCode = null;
+      this.reconnectAttempts = 0;
+      // Don't re-initialize after manual logout
     } catch (error) {
       console.error('❌ Logout error:', error);
-      throw error;
+      // Clean up state even on error
+      this.sock = undefined;
+      this.qrCode = null;
+      this.reconnectAttempts = 0;
+      // Don't throw - logout should be forgiving
     }
   }
 
@@ -163,8 +170,11 @@ export class WhatsAppClient {
     }
   }
 
-  async initialize() {
+  async initialize(isReinit: boolean = false) {
     this.isLoggingOut = false;
+    if (!isReinit) {
+      this.authResetAttempts = 0; // Only reset counter on fresh initialization
+    }
     console.log('🔌 Initializing Representative Agent...');
 
     console.log('🔒 Attempting to acquire session lock...');
@@ -179,6 +189,17 @@ export class WhatsAppClient {
     }
 
     console.log('✅ Session lock acquired. Proceeding with connection...');
+
+    // 🔓 Force QR Code if configured
+    if (config.forceQrCode) {
+      console.log('⚙️ FORCE_QR_CODE enabled. Clearing existing credentials to generate new QR code...');
+      try {
+        await db.delete(authCredentials);
+        console.log('✅ Credentials cleared. Fresh QR code will be generated.');
+      } catch (error) {
+        console.warn('⚠️ Failed to clear credentials:', error);
+      }
+    }
 
     const { state, saveCreds } = await usePostgresAuthState('whatsapp_session');
 
@@ -229,24 +250,46 @@ export class WhatsAppClient {
         }
 
         if (error === 405) {
+          this.authResetAttempts++;
           console.log('❌ Session data is corrupted or invalid (405 error).');
-          console.log('💡 Solution: Run "npx ts-node scripts/clear-auth.ts" to clear session and generate a new QR code.');
+          console.log(`🧹 Auto-clearing corrupted auth data... (Attempt ${this.authResetAttempts}/${this.maxAuthResetAttempts})`);
+
+          try {
+            await db.delete(authCredentials);
+            console.log('✅ Auth credentials cleared automatically.');
+          } catch (deleteError) {
+            console.warn('⚠️ Failed to clear auth credentials:', deleteError);
+          }
+
+          // Destroy current socket
+          this.sock = undefined;
+          this.qrCode = null;
+          this.reconnectAttempts = 0;
           await sessionManager.releaseLock();
-          process.exit(1);
+
+          if (this.authResetAttempts >= this.maxAuthResetAttempts) {
+            console.log('❌ Max auth reset attempts reached. WhatsApp may be blocked in this environment.');
+            console.log('💡 Try connecting from a different IP or check WhatsApp Web access.');
+            console.log('🔄 Server will continue running. Manual QR scan required for WhatsApp connection.');
+            return;
+          }
+
+          console.log('🔄 Re-initializing to generate new QR code...');
+          setTimeout(() => this.initialize(true), 2000); // Increased delay, mark as re-init
           return;
         }
 
         if ((error === 401 || error === DisconnectReason.loggedOut) && !this.isLoggingOut) {
           console.log('❌ Session logged out or invalid (401).');
-          console.log('💡 Clearing auth credentials to allow re-scan...');
+          console.log('🧹 Clearing auth credentials...');
           try {
             await db.delete(authCredentials);
           } catch (deleteError) {
             console.warn('⚠️ Failed to clear auth credentials (table might not exist):', deleteError);
           }
           await sessionManager.releaseLock();
-          console.log('✅ Credentials cleared. Exiting to restart...');
-          process.exit(1);
+          console.log('🔄 WhatsApp disconnected. Scan QR code via web interface to reconnect.');
+          // Don't exit - let the server continue running
           return;
         }
 
@@ -274,16 +317,18 @@ export class WhatsAppClient {
           this.reconnectAttempts++;
           const delay = Math.min(3000 * Math.pow(2, this.reconnectAttempts - 1), 30000);
           console.log(`⏳ Reconnecting in ${delay / 1000} seconds... (Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-          setTimeout(() => this.initialize(), delay);
+          setTimeout(() => this.initialize(true), delay);
         } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-          console.log('❌ Max reconnection attempts reached. Please check your connection and try again.');
+          console.log('❌ Max reconnection attempts reached. WhatsApp will remain disconnected.');
+          console.log('💡 Check your internet connection and try again later via web interface.');
           await sessionManager.releaseLock();
-          process.exit(1);
+          // Don't exit - let the server continue running
         }
       } else if (connection === 'open') {
         console.log('✅ Representative Online!');
         this.qrCode = null;
         this.lastConnectTime = Date.now();
+        this.authResetAttempts = 0; // Reset on successful connection
 
         this.messageSender = new MessageSender(this.sock!);
         this.conversationManager = new ConversationManager();
@@ -670,6 +715,34 @@ Your response:`;
 
     console.log(`🤖 AI Processing Batch for ${remoteJid} (Owner: ${isOwner}): "${fullText}"`);
 
+    // ⏰ CHECK CHAT AGENT STATUS FIRST, BEFORE ANYTHING ELSE
+    const { systemSettingsService } = await import('../services/systemSettings');
+    const chatAgentEnabled = await systemSettingsService.isChatAgentEnabled();
+    
+    if (!chatAgentEnabled && !isOwner) {
+      console.log(`🔇 Chat Agent is DISABLED. Non-owner message ignored. Logging only.`);
+      
+      // Log the message for context, but don't process or queue it
+      const contact = await withRetry(async () => {
+        return await db.select().from(contacts).where(eq(contacts.phone, remoteJid)).then(res => res[0]);
+      });
+      
+      if (contact) {
+        await withRetry(async () => {
+          await db.insert(messageLogs).values({
+            contactPhone: remoteJid,
+            role: 'user',
+            content: fullText,
+            type: 'text',
+            platform: 'whatsapp'
+          });
+        });
+      }
+      
+      return; // ✅ Exit COMPLETELY - don't queue, don't process
+    }
+
+    // ⏰ NOW check rate limits (after chat agent check)
     if (rateLimitManager.isLimited() && !isOwner) {
       console.log(`⏸️ Rate limited. Queueing message from ${remoteJid} (silent mode)`);
       rateLimitManager.enqueue(remoteJid, messages);

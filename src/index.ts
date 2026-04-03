@@ -5,7 +5,28 @@ import { config } from './config/env';
 import { WhatsAppClient } from './core/whatsapp';
 import { TelegramClient } from './core/telegram';
 import { db, testConnection } from './database';
-import { contacts, messageLogs, authCredentials, aiProfile, userProfile, businessProfile, marketingCampaigns } from './database/schema';
+import { 
+    contacts, 
+    messageLogs, 
+    authCredentials, 
+    aiProfile, 
+    userProfile, 
+    businessProfile, 
+    marketingCampaigns,
+    conversations,
+    messageQueue,
+    queueMetrics,
+    reportQueue,
+    facts,
+    scheduledPosts,
+    contentTemplates,
+    systemSettings,
+    shops,
+    products,
+    groups,
+    groupMembers,
+    sessionLock
+} from './database/schema';
 import { eq, desc, sql } from 'drizzle-orm';
 import { sessionManager } from './services/sessionManager';
 import { groupMetadataLimiter } from './utils/rateLimiter';
@@ -194,18 +215,101 @@ app.post('/api/disconnect', async (req, res) => {
         // 3. Clear Auth Credentials
         await db.delete(authCredentials);
 
-        console.log('✅ Disconnected successfully. Ready for new QR scan.');
+        console.log('✅ Disconnected successfully. Re-initializing to generate new QR code...');
 
-        // 4. Send success response (NO process.exit!)
+        // 4. Re-initialize to generate fresh QR code
+        setTimeout(() => {
+            whatsappClient.initialize(true).catch(err => {
+                console.error('❌ Failed to re-initialize after disconnect:', err);
+            });
+        }, 500);
+
+        // 5. Send success response (NO process.exit!)
         res.json({
             success: true,
-            message: 'Disconnected successfully. Scan QR code to reconnect.',
-            requiresRestart: false
+            message: 'Disconnected successfully. Generating new QR code...',
+            requiresRestart: false,
+            nextAction: 'check status for QR code'
         });
 
     } catch (error) {
         console.error('Disconnect failed:', error);
         res.status(500).json({ error: 'Failed to disconnect' });
+    }
+});
+
+// Reset Database Endpoint - Erase all data from all tables
+app.post('/api/admin/reset-database', async (req, res) => {
+    try {
+        console.log('⚠️ RESET DATABASE REQUESTED - Erasing all data...');
+
+        // Delete all data from all tables (in correct dependency order)
+        await db.delete(messageQueue);
+        console.log('✓ Cleared message_queue');
+
+        await db.delete(reportQueue);
+        console.log('✓ Cleared report_queue');
+
+        await db.delete(queueMetrics);
+        console.log('✓ Cleared queue_metrics');
+
+        await db.delete(messageLogs);
+        console.log('✓ Cleared message_logs');
+
+        await db.delete(conversations);
+        console.log('✓ Cleared conversations');
+
+        await db.delete(groupMembers);
+        console.log('✓ Cleared group_members');
+
+        await db.delete(groups);
+        console.log('✓ Cleared groups');
+
+        await db.delete(contacts);
+        console.log('✓ Cleared contacts');
+
+        await db.delete(products);
+        console.log('✓ Cleared products');
+
+        await db.delete(shops);
+        console.log('✓ Cleared shops');
+
+        await db.delete(scheduledPosts);
+        console.log('✓ Cleared scheduled_posts');
+
+        await db.delete(contentTemplates);
+        console.log('✓ Cleared content_templates');
+
+        await db.delete(facts);
+        console.log('✓ Cleared facts');
+
+        await db.delete(marketingCampaigns);
+        console.log('✓ Cleared marketing_campaigns');
+
+        await db.delete(authCredentials);
+        console.log('✓ Cleared auth_credentials');
+
+        await db.delete(sessionLock);
+        console.log('✓ Cleared session_lock');
+
+        // Note: Do NOT clear userProfile, aiProfile, businessProfile, systemSettings
+        // These are configuration tables that should persist
+
+        console.log('✅ Database reset completed successfully!');
+
+        res.json({
+            success: true,
+            message: 'Database reset completed! All data has been erased.',
+            tablesCleared: 14,
+            configurationPreserved: true
+        });
+
+    } catch (error) {
+        console.error('❌ Database reset failed:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Failed to reset database: ' + (error instanceof Error ? error.message : String(error))
+        });
     }
 });
 

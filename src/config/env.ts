@@ -34,5 +34,6 @@ export const config = {
     databaseUrl: process.env.DATABASE_URL,
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
     telegramChatId: process.env.TELEGRAM_CHAT_ID,
-    nodeEnv: process.env.NODE_ENV || 'development'
+    nodeEnv: process.env.NODE_ENV || 'development',
+    forceQrCode: process.env.FORCE_QR_CODE === 'true' // Force QR code even with existing credentials
 };

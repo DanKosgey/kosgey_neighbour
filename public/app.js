@@ -915,6 +915,15 @@ async function loadSettings() {
                 calendarAccessToggle.checked = calendarAccessEnabled;
                 updateCalendarAccessStatus(calendarAccessEnabled);
             }
+
+            // Load Chat Agent Status
+            const chatAgentToggle = document.getElementById('chat-agent-toggle');
+            const chatAgentStatus = document.getElementById('chat-agent-status-text');
+            if (chatAgentToggle && chatAgentStatus) {
+                const chatAgentEnabled = s['chat_agent_enabled'] !== 'false'; // Default to true if not set
+                chatAgentToggle.checked = chatAgentEnabled;
+                updateChatAgentStatus(chatAgentEnabled);
+            }
         }
     } catch (error) {
         console.error('Failed to load system settings:', error);
@@ -944,6 +953,22 @@ function updateCalendarAccessStatus(isEnabled) {
             statusEl.style.color = 'var(--success, #10b981)';
         } else {
             statusEl.innerHTML = '🔒 <strong>Calendar access disabled</strong> — Scheduling features are hidden';
+            statusEl.style.color = 'var(--warning, #f59e0b)';
+        }
+    }
+}
+
+function updateChatAgentStatus(isEnabled) {
+    const statusIcon = document.getElementById('chat-agent-status-icon');
+    const statusEl = document.getElementById('chat-agent-status-text');
+    if (statusIcon && statusEl) {
+        if (isEnabled) {
+            statusIcon.textContent = '✅';
+            statusEl.innerHTML = '<strong>Chat Agent: ENABLED</strong> — AI will auto-reply to incoming DMs';
+            statusEl.style.color = 'var(--success, #10b981)';
+        } else {
+            statusIcon.textContent = '🔇';
+            statusEl.innerHTML = '<strong>Chat Agent: DISABLED</strong> — Bot will only broadcast ads';
             statusEl.style.color = 'var(--warning, #f59e0b)';
         }
     }
@@ -1106,28 +1131,77 @@ function initializeSettings() {
                 const data = await response.json();
 
                 if (data.success) {
-                    btn.textContent = 'Disconnected ✓';
+                    btn.textContent = 'Disconnecting...';
 
                     // Show success message
-                    alert('Disconnected successfully! The app will now show a QR code for you to scan.');
+                    showToast('Disconnected successfully! Generating new QR code...', 'success');
 
                     // Switch to dashboard to show QR code
                     switchPage('dashboard');
 
-                    // Force status check to update UI
-                    setTimeout(() => {
-                        checkStatus();
-                        btn.textContent = originalText;
-                        btn.disabled = false;
-                    }, 1000);
+                    // Wait longer for re-initialization and QR code generation
+                    // Then refresh status multiple times to catch the new QR code
+                    let attempts = 0;
+                    const maxAttempts = 5;
+                    const checkInterval = setInterval(async () => {
+                        attempts++;
+                        console.log(`🔄 Checking status for QR code (attempt ${attempts}/${maxAttempts})`);
+                        await checkStatus();
+                        
+                        if (attempts >= maxAttempts) {
+                            clearInterval(checkInterval);
+                            btn.textContent = originalText;
+                            btn.disabled = false;
+                        }
+                    }, 1500); // Check every 1.5 seconds
+
                 } else {
                     throw new Error(data.error || 'Disconnect failed');
                 }
             } catch (error) {
                 console.error('Disconnect failed:', error);
-                alert('Disconnect failed: ' + error.message);
+                showToast('Disconnect failed: ' + error.message, 'error');
                 btn.textContent = originalText;
                 btn.disabled = false;
+            }
+        }
+    });
+
+    // Reset Database Button
+    document.getElementById('reset-database-btn')?.addEventListener('click', async () => {
+        const confirmMessage = 'WARNING: This will permanently delete ALL data from all database tables. This action CANNOT be undone.\n\nAre you absolutely sure you want to continue?';
+        if (confirm(confirmMessage)) {
+            const secondConfirm = confirm('⚠️ FINAL WARNING: This will erase:\n- All contacts\n- All messages\n- All settings\n- All marketing campaigns\n- All shops & products\n- All schedules\n\nType your confirmation by clicking OK if you\'re certain.');
+            if (secondConfirm) {
+                const btn = document.getElementById('reset-database-btn');
+                const originalText = btn.textContent;
+                btn.textContent = 'Resetting...';
+                btn.disabled = true;
+
+                try {
+                    const response = await fetch(`${API_BASE}/api/admin/reset-database`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        btn.textContent = 'Reset ✓';
+                        alert('✅ Database successfully reset! All data has been erased.\n\nThe app will now reload.');
+                        
+                        // Reload the page to refresh the UI
+                        setTimeout(() => {
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        throw new Error(data.error || 'Reset failed');
+                    }
+                } catch (error) {
+                    console.error('Database reset failed:', error);
+                    alert('❌ Reset failed: ' + error.message);
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }
             }
         }
     });
@@ -1174,6 +1248,97 @@ function initializeSettings() {
                 showToast('Failed to update calendar access', 'error');
             } finally {
                 calendarAccessToggle.disabled = false;
+            }
+        });
+    }
+
+    // Chat Agent Control Toggle
+    const chatAgentToggle = document.getElementById('chat-agent-toggle');
+    if (chatAgentToggle) {
+        chatAgentToggle.addEventListener('change', async (event) => {
+            // Prevent event bubbling to parent elements
+            event.stopPropagation();
+            
+            const isEnabled = chatAgentToggle.checked;
+            const statusEl = document.getElementById('chat-agent-status-text');
+
+            // Disable toggle while saving
+            chatAgentToggle.disabled = true;
+            if (statusEl) statusEl.textContent = 'Updating...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/settings/system`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        key: 'chat_agent_enabled',
+                        value: isEnabled ? 'true' : 'false'
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success || response.ok) {
+                    updateChatAgentStatus(isEnabled);
+                    showToast(
+                        isEnabled ? '✅ Chat Agent enabled' : '🔇 Chat Agent disabled',
+                        'success'
+                    );
+                } else {
+                    throw new Error(data.error || 'Failed to update setting');
+                }
+            } catch (error) {
+                console.error('Failed to update chat agent:', error);
+                // Revert toggle on error
+                chatAgentToggle.checked = !isEnabled;
+                if (statusEl) statusEl.textContent = '❌ Error updating setting';
+                showToast('Failed to update chat agent settings', 'error');
+            } finally {
+                chatAgentToggle.disabled = false;
+            }
+        });
+    }
+
+    // Chat Agent Save Button
+    const saveChatAgentBtn = document.getElementById('save-chat-agent-btn');
+    if (saveChatAgentBtn) {
+        saveChatAgentBtn.addEventListener('click', async () => {
+            const toggle = document.getElementById('chat-agent-toggle');
+            const isEnabled = toggle ? toggle.checked : true;
+            const btn = saveChatAgentBtn;
+            const originalText = btn.textContent;
+
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/settings/system`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        key: 'chat_agent_enabled',
+                        value: isEnabled ? 'true' : 'false'
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success || response.ok) {
+                    updateChatAgentStatus(isEnabled);
+                    btn.textContent = 'Saved ✓';
+                    btn.style.backgroundColor = 'var(--success, #10b981)';
+                    showToast(
+                        isEnabled ? '✅ Chat Agent enabled' : '🔇 Chat Agent disabled',
+                        'success'
+                    );
+                    setTimeout(() => { btn.textContent = originalText; btn.style.backgroundColor = ''; }, 2000);
+                } else {
+                    throw new Error(data.error || 'Failed to save setting');
+                }
+            } catch (error) {
+                console.error('Failed to save chat agent settings:', error);
+                showToast('Failed to save chat agent settings', 'error');
+                btn.textContent = originalText;
+            } finally {
+                btn.disabled = false;
             }
         });
     }

@@ -176,6 +176,33 @@ export const AI_TOOLS = [
                 }
             },
             {
+                name: "enable_chat_agent",
+                description: "Enable the chat agent to auto-reply to incoming DMs. When enabled, the AI will respond to customer inquiries while still broadcasting ads. OWNER ONLY.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {},
+                    required: []
+                }
+            },
+            {
+                name: "disable_chat_agent",
+                description: "Disable the chat agent auto-reply feature. When disabled, the bot will only broadcast ads to groups and will NOT respond to DMs. Useful for broadcast-only mode. OWNER ONLY.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {},
+                    required: []
+                }
+            },
+            {
+                name: "get_chat_agent_status",
+                description: "Check the current status of the chat agent (enabled for auto-replies or disabled for broadcast-only mode). OWNER ONLY.",
+                parameters: {
+                    type: "OBJECT",
+                    properties: {},
+                    required: []
+                }
+            },
+            {
                 name: "get_current_time",
                 description: "Get the current date and time. CRITICAL: Use this FIRST when customers mention relative dates like 'tomorrow', 'next week', 'in 2 days', etc., so you can provide accurate scheduling information and know what specific dates they're referring to.",
                 parameters: {
@@ -498,6 +525,15 @@ export async function executeLocalTool(name: string, args: any, context: any) {
 
         case 'get_calendar_access_status':
             return { result: await ownerTools.getCalendarAccessStatus() };
+
+        case 'enable_chat_agent':
+            return { result: await ownerTools.enableChatAgent() };
+
+        case 'disable_chat_agent':
+            return { result: await ownerTools.disableChatAgent() };
+
+        case 'get_chat_agent_status':
+            return { result: await ownerTools.getChatAgentStatus() };
 
         case 'check_availability':
             try {
